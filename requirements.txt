@@ -1,0 +1,5 @@
+gpxpy
+moviepy
+# brew install ffmpeg
+geopandas
+osmx
