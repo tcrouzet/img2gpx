@@ -13,4 +13,4 @@ route.gpx: la trace à suivre.
 distance_filter: 100 mètres par défaut (distance de la trace maximale pour prendre en compte une image)
 Vous pouvez indiquer d'autres noms de fichier et chemins dans parameters.py
 
-La vidéo est générée dans output.
+La vidéo est générée dans le dossier _output.
