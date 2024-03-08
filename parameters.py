@@ -2,14 +2,18 @@ import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 assets_dir = f"{script_dir}assets/" 
-output_folder = f"{script_dir}output/"
+output_folder = f"{script_dir}_output/"
+cache_folder = f"{script_dir}_cache/"
+os.makedirs(output_folder, exist_ok=True)
+os.makedirs(cache_folder, exist_ok=True)
+
 
 images_folder = os.path.expanduser("~/Documents/GitHub/727/images/")
-gpx_path = f"{assets_dir}route.gpx"
-cover_img = f"{assets_dir}cover.png"
-audio_file = f"{assets_dir}music.mp3"
-cache_file = f"{script_dir}cache/_img2gpx_cache.pkl"
-font_file = f"{assets_dir}Geneva.ttf"
+gpx_path = os.path.join(assets_dir, "route.gpx")
+cover_img = os.path.join(assets_dir, "cover.png")
+audio_file = os.path.join(assets_dir,"music.mp3")
+cache_file = os.path.join(cache_folder,"_img2gpx_cache.pkl")
+font_file = os.path.join(assets_dir, "Geneva.ttf")
 img_trace = os.path.join(output_folder, "_trace.png")
 video_file = os.path.join(output_folder, "_video.mp4")
 
