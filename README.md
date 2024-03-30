@@ -17,6 +17,6 @@ La vidéo est générée dans le dossier _output.
 
 # gpxcities.py
 
-Générer le road book d'une trace et une cartographie acec statistiques.
+Génère le roadbook d'une trace et une cartographie avec statistiques.
 
 [![i727 stats](assets/screenshot_map.jpg)](https://727.tcrouzet.com/static/route-727_road_book_plus.html)
