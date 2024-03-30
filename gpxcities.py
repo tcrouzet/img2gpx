@@ -31,7 +31,7 @@ def format_ligne(index, nom_ville, info):
         enter = o.meter_2_km(info['distance_enter'])
         lisible = o.distance_lisible(info['distance'])
 
-        if info['web']:
+        if str(info['web']) == "nan":
             nom = nom_ville
         else:
             nom = f"[{nom_ville}]({info['web']})"
@@ -149,8 +149,9 @@ def upgrade_ways(ways_info):
         way.update_title()
 
 
-def export_book(path,ways_info):
+def export_book(path,ways_info,title):
     with open(path, 'w', encoding='utf-8') as fichier_md:
+        fichier_md.write(f"# {title}\n\n")
         fichier_md.write(format_ways(ways_info))
 
 
@@ -175,7 +176,8 @@ road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.png"
 
 with open(road_book, 'w', encoding='utf-8') as fichier_md:
 
-    fichier_md.write( str(villes_info.towns_numering()) + " communes\n\n" )
+    fichier_md.write(f"# {gpx_name}\n\n")
+    fichier_md.write( str(villes_info.towns_numering()) + f" communes\n\n" )
 
     for index, nom_ville, infos in villes_info:
 
@@ -237,6 +239,6 @@ road_book = os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus
 
 #export_book(ways_info)
 ways_info = compress_ways(ways_info)
-export_book(road_book, ways_info)
+export_book(road_book, ways_info, gpx_name)
 
 #ways_info = sandwich_ways(ways_info)

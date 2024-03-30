@@ -5,8 +5,9 @@ import gpxpy.gpx
 from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip, AudioFileClip
 import numpy as np
 from datetime import datetime
-from parameters import images_folder, cover_img, font_file, audio_file, distance_filter, img_trace, video_file, gpx_file
+from parameters import images_folder, cover_img, font_file, audio_file, distance_filter, img_trace, video_file, gpx_file, gpx_path
 import tools as t
+import osm_tools as o
 import cache_manager as cache
 import locale
 locale.setlocale(locale.LC_TIME, 'fr_FR')
@@ -134,7 +135,7 @@ def process_img(folder, gpx, meters, towns):
                     datetime = exif_data['DateTime']
                     width = exif_data['ExifImageWidth']
                     height = exif_data['ExifImageHeight']
-                    town = t.locate_point(lat,lon,towns, True)
+                    (town, postal_code, population, website) = o.locate_point_in_town(lat,lon,towns)
 
                 else:
                     continue
@@ -158,8 +159,8 @@ def process_img(folder, gpx, meters, towns):
 
 gpx = t.gpx_reader(gpx_path)
 meters = t.gpx_meters(gpx)
-frame = t.gpx_frame(gpx)
-towns = t.cities(frame)
+frame = o.gpx_frame(gpx)
+towns = o.cities(frame)
 images = process_img(images_folder, gpx, meters, towns)
 images = sorted(images, key=lambda dico: dico["meters"])
 
