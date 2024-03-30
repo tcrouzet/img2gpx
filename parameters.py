@@ -9,13 +9,13 @@ os.makedirs(cache_folder, exist_ok=True)
 
 
 images_folder = os.path.expanduser("~/Documents/GitHub/727/images/")
-gpx_path = os.path.join(assets_dir, "route.gpx")
 cover_img = os.path.join(assets_dir, "cover.png")
 audio_file = os.path.join(assets_dir,"music.mp3")
-cache_file = os.path.join(cache_folder,"_img2gpx_cache.pkl")
+cache_file = os.path.join(cache_folder,"_img2gpx_cache")
 font_file = os.path.join(assets_dir, "Geneva.ttf")
 img_trace = os.path.join(output_folder, "_trace.png")
 video_file = os.path.join(output_folder, "_video.mp4")
+logs_file = os.path.join(script_dir, "_logs.txt")
 
 distance_filter = 100 #Ignorer image plus loin de la trace
 

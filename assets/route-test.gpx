@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="EditGPX">
+  <metadata>
+    <name>route-balaruc</name>
+  </metadata>
+  <trk>
+    <name><![CDATA[route-balaruc]]></name>
+    <extensions>
+      <line xmlns="http://www.topografix.com/GPX/gpx_style/0/2">
+        <color>0000FF</color>
+        <width>4</width>
+      </line>
+    </extensions>
+    <trkseg>
+      <trkpt lat="43.443105" lon="3.690634">
+        <ele>1.2</ele>
+      </trkpt>
+      <trkpt lat="43.443140" lon="3.690740">
+        <ele>1.5</ele>
+      </trkpt>
+      <trkpt lat="43.443367" lon="3.691196">
+        <ele>1.3</ele>
+      </trkpt>
+      <trkpt lat="43.443367" lon="3.691261">
+        <ele>1.5</ele>
+      </trkpt>
+      <trkpt lat="43.443333" lon="3.691354">
+        <ele>1.9</ele>
+      </trkpt>
+      <trkpt lat="43.443134" lon="3.691504">
+        <ele>2</ele>
+      </trkpt>
+      <trkpt lat="43.442989" lon="3.691701">
+        <ele>2</ele>
+      </trkpt>
+      <trkpt lat="43.443156" lon="3.692690">
+        <ele>2</ele>
+      </trkpt>
+      <trkpt lat="43.443770" lon="3.692510">
+        <ele>3</ele>
+      </trkpt>
+      <trkpt lat="43.443895" lon="3.692533">
+        <ele>2.9</ele>
+      </trkpt>
+      <trkpt lat="43.444252" lon="3.693418">
+        <ele>2.2</ele>
+      </trkpt>
+      <trkpt lat="43.444250" lon="3.693600">
+        <ele>2</ele>
+      </trkpt>
+      <trkpt lat="43.444520" lon="3.694610">
+        <ele>1</ele>
+      </trkpt>
+      <trkpt lat="43.445500" lon="3.694100">
+        <ele>1.4</ele>
+      </trkpt>
+      <trkpt lat="43.445660" lon="3.694100">
+        <ele>2.2</ele>
+      </trkpt>
+      <trkpt lat="43.445820" lon="3.694130">
+        <ele>3.2</ele>
+      </trkpt>
+      <trkpt lat="43.445870" lon="3.694120">
+        <ele>3.4</ele>
+      </trkpt>
+      <trkpt lat="43.445910" lon="3.694210">
+        <ele>3.4</ele>
+      </trkpt>
+      <trkpt lat="43.445980" lon="3.694320">
+        <ele>3.8</ele>
+      </trkpt>
+      <trkpt lat="43.446070" lon="3.694380">
+        <ele>4</ele>
+      </trkpt>
+      <trkpt lat="43.446210" lon="3.694400">
+        <ele>4</ele>
+      </trkpt>
+      <trkpt lat="43.446230" lon="3.694540">
+        <ele>3.7</ele>
+      </trkpt>
+      <trkpt lat="43.446879" lon="3.694145">
+        <ele>4</ele>
+      </trkpt>
+      <trkpt lat="43.448220" lon="3.693380">
+        <ele>3.8</ele>
+      </trkpt>
+      <trkpt lat="43.449650" lon="3.692510">
+        <ele>4.4</ele>
+      </trkpt>
+      <trkpt lat="43.449910" lon="3.692310">
+        <ele>6.7</ele>
+      </trkpt>
+      <trkpt lat="43.451430" lon="3.691440">
+        <ele>13</ele>
+      </trkpt>
+      <trkpt lat="43.452030" lon="3.691150">
+        <ele>13.1</ele>
+      </trkpt>
+      <trkpt lat="43.452880" lon="3.690810">
+        <ele>8</ele>
+      </trkpt>
+      <trkpt lat="43.454150" lon="3.690390">
+        <ele>9.8</ele>
+      </trkpt>
+      <trkpt lat="43.454960" lon="3.690110">
+        <ele>9.3</ele>
+      </trkpt>
+      <trkpt lat="43.455960" lon="3.689730">
+        <ele>8.1</ele>
+      </trkpt>
+      <trkpt lat="43.456610" lon="3.689530">
+        <ele>9.7</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

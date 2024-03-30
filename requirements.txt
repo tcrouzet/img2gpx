@@ -1,5 +1,9 @@
 gpxpy
 moviepy
-# brew install ffmpeg
 geopandas
+matplotlib
 osmx
+requests
+scipy
+tqdm
+folium
