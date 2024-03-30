@@ -1,4 +1,4 @@
-from parameters import assets_dir, output_folder, logs_file
+from parameters import assets_dir, output_folder, logs_file, gpx_file, gpx_path
 import tools as t
 import osm_tools as o
 import os, sys
@@ -10,10 +10,6 @@ os.system('clear')
 
 sys.stdout = t.DualOutput(logs_file)
 sys.stderr = sys.stdout
-
-#gpx_file="route-balaruc.gpx"
-#gpx_file="route-tourmagne.gpx"
-gpx_file="route-727.gpx"
 
 cache.init_cache(gpx_file)
 
@@ -159,7 +155,6 @@ def export_book(path,ways_info):
 
 
 t.pd("Acquisition towns started")
-gpx_path = os.path.join(assets_dir, gpx_file)
 gpx = t.gpx_reader(gpx_path)
 gpx_name = t.gpx_name(gpx)
 t.pd(gpx_name)

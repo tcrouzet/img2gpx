@@ -5,18 +5,14 @@ import gpxpy.gpx
 from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip, AudioFileClip
 import numpy as np
 from datetime import datetime
-from parameters import images_folder, assets_dir, cover_img, font_file, audio_file, distance_filter, img_trace, video_file
+from parameters import images_folder, cover_img, font_file, audio_file, distance_filter, img_trace, video_file, gpx_file
 import tools as t
 import cache_manager as cache
 import locale
 locale.setlocale(locale.LC_TIME, 'fr_FR')
 
-gpx_file="route-727.gpx"
-gpx_path = os.path.join(assets_dir, gpx_file)
-
 os.system('clear')
 cache.init_cache(gpx_file)
-
 
 def get_exif_data(image_path):
 
