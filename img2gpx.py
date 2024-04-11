@@ -178,7 +178,7 @@ padding = 10
 #shadow_position = (12, 12)
 
 clips = []
-duree_image = 1.1
+duree_image = 1.5
 rayon_du_point = 30
 font = ImageFont.truetype(font_file, 40)
 
@@ -232,9 +232,10 @@ clip_final = CompositeVideoClip([video_fond, trace_clip])
 clips_sequence = [first_end_clip, clip_final, first_end_clip]
 clip_final = concatenate_videoclips(clips_sequence, method="compose")
 
-audio_clip = AudioFileClip(audio_file)
-audio_clip = audio_clip.subclip(0, clip_final.duration)
-audio_clip = audio_clip.audio_fadeout(duree_image*3)
-clip_final = clip_final.set_audio(audio_clip)
+if False:
+    audio_clip = AudioFileClip(audio_file)
+    audio_clip = audio_clip.subclip(0, clip_final.duration)
+    audio_clip = audio_clip.audio_fadeout(duree_image*3)
+    clip_final = clip_final.set_audio(audio_clip)
 
 clip_final.write_videofile(video_file, codec="libx264", fps=24)        

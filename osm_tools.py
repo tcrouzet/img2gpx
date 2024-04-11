@@ -469,10 +469,11 @@ def plot_communes_folium(path, communes_gdf, villes_info, gpx=None, title="Trace
     m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
     # Ajouter les polygones des communes à la carte
-    # for _, row in communes_gdf.iterrows():
-    #     sim_geo = folium.GeoJson(data=row['geometry'],
-    #         style_function=lambda x: {'fillColor': 'lightblue', 'color': 'blue', 'weight': 0.5})
-    #     sim_geo.add_to(m)
+    for index, commune in communes_gdf.iterrows():
+        folium.GeoJson(
+            data=commune['geometry'],
+            style_function=lambda x: {'fillColor': 'gray', 'color': 'black', 'weight': 0.5},
+        ).add_to(m)
 
     # Ajouter des traces GPX si disponibles
     if mode == "gpx":
