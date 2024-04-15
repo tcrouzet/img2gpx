@@ -466,10 +466,10 @@ def title_element(title_text, stats, bilan):
         color = terrain_color(key)
         legend += f"<div style='display:flex; align-items:center;'><div style='background:{color};width:1rem;height:1rem;margin-right:0.5rem;'></div>{label}</div>"
 
-
+    bilan_format = bilan.replace("\n","<br/>")
     title_html = f"""
         <div style="z-index:999;position: fixed; top: 1rem; right: 1rem; margin:0; padding:0.5rem; background-color: rgba(255,255,255,1); border-radius: 5px;">
-            <h3 style="font-size:1.5rem">{title_text}</h3>{bilan.replace("\n","<br/>")}<br/><br/>{legend}
+            <h3 style="font-size:1.5rem">{title_text}</h3>{bilan_format}<br/><br/>{legend}
         </div>
          """
     title_element = Element(title_html)
