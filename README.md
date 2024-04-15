@@ -24,8 +24,13 @@ Génère le roadbook d'une trace et une cartographie avec statistiques.
 # Installation note (on Mac OS)
 
 cd img2gpx_dir
+
 python -m venv venv
+
 source venv/bin/activate
+
 pip install --upgrade pip
+
 brew install spatialindex geos proj (needed for osmx)
+
 pip install -r requirements.txt
