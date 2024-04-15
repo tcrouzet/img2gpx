@@ -20,3 +20,12 @@ La vidéo est générée dans le dossier _output.
 Génère le roadbook d'une trace et une cartographie avec statistiques.
 
 [![i727 stats](assets/screenshot_map.jpg)](https://727.tcrouzet.com/static/route-727_road_book_plus.html)
+
+# Installation note (on Mac OS)
+
+cd img2gpx_dir
+python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+brew install spatialindex geos proj (needed for osmx)
+pip install -r requirements.txt
