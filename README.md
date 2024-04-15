@@ -31,6 +31,6 @@ source venv/bin/activate
 
 pip install --upgrade pip
 
-brew install spatialindex geos proj (needed for osmnx)
+brew install spatialindex geos proj (needed for osmnx - https://osmnx.readthedocs.io/en/stable/installation.html)
 
 pip install -r requirements.txt
