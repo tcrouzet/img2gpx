@@ -5,10 +5,11 @@ import gpxpy.gpx
 from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip, AudioFileClip
 import numpy as np
 from datetime import datetime
-from parameters import images_folder, cover_img, font_file, audio_file, distance_filter, img_trace, video_file, gpx_file, gpx_path
+from parameters import images_folder, cover_img, font_file, audio_file, distance_filter, img_trace, video_file, gpx_file, gpx_path, images_root, output_folder
 import tools as t
 import osm_tools as o
 import cache_manager as cache
+import yaml
 import locale
 locale.setlocale(locale.LC_TIME, 'fr_FR')
 
@@ -156,6 +157,23 @@ def process_img(folder, gpx, meters, towns):
 
     return images
 
+def create_yml(images):
+    data = []
+    for image in images:
+        path = image['path'].replace(images_folder,"/")
+        entry = {
+            'alt': image['town'],
+            'date': image['datetime'],
+            'image': path,
+            'lat': image['latitude'],
+            'lon': image['longitude']
+        }
+        data.append(entry)
+    yalm_file = os.path.join(output_folder, gpx_file.replace(".gpx",".yml"))
+
+    with open(yalm_file, 'w') as file:
+        yaml.dump(data, file, allow_unicode=True)
+
 
 gpx = t.gpx_reader(gpx_path)
 meters = t.gpx_meters(gpx)
@@ -164,6 +182,9 @@ towns = o.cities(frame)
 images = process_img(images_folder, gpx, meters, towns)
 images = sorted(images, key=lambda dico: dico["meters"])
 
+create_yml(images)
+exit()
+
 #Création de l'image de la trace
 #taille_cible = (1920, 1440)
 #taille_cible = (4800, 3600)
@@ -171,6 +192,7 @@ taille_cible = (1600, 1200)
 #color = (255, 0, 0, 255) #Red
 color = (255, 255, 255, 255) #white
 shadow = "black"
+
 
 create_gpx_trace_image_segment(gpx, taille_cible, color, frame, img_trace)
 text_position = (10, 10)

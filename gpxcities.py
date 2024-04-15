@@ -132,9 +132,6 @@ def upgrade_ways(ways_info):
             else:
                 osmids.extend(way.way['osmid'])
 
-    #print(osmids)
-    #exit()
-
     query = f"""[out:json];way(id:{','.join(map(str, osmids))});out tags;"""
     ways_data = o.overpass(query)
     ways_data_dict = {item["id"]: item["tags"] for item in ways_data}
@@ -232,8 +229,8 @@ upgrade_ways(ways_info)
 
 road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.png"))
 o.plot_communes(road_png, traversed_communes_gdf, villes_info, ways_info, gpx_name)
-road_html =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.html"))
-o.plot_communes_folium(road_html, traversed_communes_gdf, villes_info, ways_info, gpx_name)
+road_html =  os.path.join(output_folder, gpx_file.replace(".gpx",".html"))
+o.plot_communes_folium(road_html, traversed_communes_gdf, ways_info, gpx_name)
 
 road_book = os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.md"))
 

@@ -1,4 +1,5 @@
-from shapely.geometry import Point, LineString, Polygon
+from shapely.geometry import Point, LineString, Polygon, MultiLineString
+from shapely.ops import linemerge
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import geopandas as gpd
@@ -11,6 +12,7 @@ import cache_manager as cache
 from parameters import output_folder
 import webbrowser, folium
 from branca.element import MacroElement, Element, Figure
+from itertools import groupby
 
 from jinja2 import Template
 
@@ -89,7 +91,21 @@ class WayInfo:
         print(self.way)
         print(self.tags)
         #print(self.way['Name'].to_string())
+        ##all_properties = dir(self)
+        #properties = {prop: getattr(self, prop) for prop in all_properties if not callable(getattr(self, prop)) and not prop.startswith('__')}
+        #print(properties)
 
+    def print_object(obj):
+        return True
+        if(isinstance(obj,dict)):
+            for key, value in obj.items():
+                print(f"{key} : {value}")
+        else:
+            attributes = dir(obj)
+            for attr in attributes:
+                # Filtrer les méthodes et attributs spéciaux
+                if not callable(getattr(obj, attr)) and not attr.startswith('__'):
+                    print(f"{attr} : {getattr(obj, attr)}")
 
     def update_tags(self,tags):
         self.tags = tags
@@ -108,6 +124,7 @@ class WayInfo:
 
         if not is_osmid_positive(self.way['osmid']):
             return "Unknown"
+        
 
         surface = self.double_get('surface')
         cycleway = self.double_get('cycleway')
@@ -150,12 +167,10 @@ class WayInfo:
             return 'SecondaryRoad'
 
         if highway == 'tertiary':
-            return 'SmallRoad'
+            return WayInfo.is_street(name,'SmallRoad')
 
         if highway == 'residential' or highway == 'living_street':
-            if 'boulevard' in name or 'avenue' in name:
-                return 'MainStreet'
-            return 'Street'
+            return WayInfo.is_street(name,'Street')
 
         if highway == 'track':
             tracktype = self.double_get('tracktype')
@@ -189,14 +204,25 @@ class WayInfo:
         return 'Unknown'
 
 
+    def is_street(name,type):
+        if 'boulevard' in name or 'avenue' in name:
+            return 'MainStreet'
+        if 'rue' or 'impasse' in name:
+            return 'Street'
+        return type
+
+
     def update_title(self):
 
         if not is_osmid_positive(self.way['osmid']):
             self.title = "Unknown"
             self.terrain = "Unknown"
             return True
+        
+        WayInfo.print_object(self.way)
 
         self.terrain = self.find_terrain()
+        print(self.terrain+"\n")
 
         if 'name' in self.way:
             name = get_first_string(self.way['name']).lower()
@@ -438,7 +464,7 @@ def title_element(title_text, stats, bilan):
             continue
         label = f"{key} {stat['percent']}%"
         color = terrain_color(key)
-        legend += f"<div style='display:flex; align-items:center;'><div style='background:{color};width:20px;height:20px;margin-right:5px;'></div>{label}</div>"
+        legend += f"<div style='display:flex; align-items:center;'><div style='background:{color};width:1rem;height:1rem;margin-right:0.5rem;'></div>{label}</div>"
 
 
     title_html = f"""
@@ -449,7 +475,7 @@ def title_element(title_text, stats, bilan):
     title_element = Element(title_html)
     return title_element
 
-def plot_communes_folium(path, communes_gdf, villes_info, gpx=None, title="Trace"):
+def plot_communes_folium(path, communes_gdf, gpx=None, title="Trace"):
 
     mode = 'default'
     if gpx:
@@ -483,19 +509,60 @@ def plot_communes_folium(path, communes_gdf, villes_info, gpx=None, title="Trace
                 folium.PolyLine(points, color='red', weight=3, opacity=0.5).add_to(m)
 
     elif mode == "info":
-        for way in gpx:
-            latitudes, longitudes = zip(*way.segment)  # Décompresse les tuples en deux listes
-            color = terrain_color(way.terrain)  # Utilisez votre logique de couleur ici
-            folium.PolyLine(locations=list(zip(latitudes, longitudes)),
-                color=color,
-                weight=4,
-                opacity=1).add_to(m)
+
+        filter = 0.001
+ 
+        # Grouper les segments par terrain
+        for terrain, group in groupby(sorted(gpx, key=lambda x: x.terrain), key=lambda x: x.terrain):
+            multiline = MultiLineString([way.segment for way in group])
+            merged_line = linemerge(multiline)
+
+            if isinstance(merged_line, LineString):
+                coords = [list(merged_line.simplify(filter, preserve_topology=True).coords)]
+            elif isinstance(merged_line, MultiLineString):
+                coords = [list(line.simplify(filter, preserve_topology=True).coords) for line in merged_line.geoms]
+
+            else:
+                coords = []
+
+            color = terrain_color(terrain)
+            for coord in coords:
+                folium.PolyLine(locations=coord,
+                                color=color,
+                                weight=4,
+                                opacity=1,
+                                bubblingMouseEvents=False).add_to(m)
 
         stats = ways_stats(gpx)
         mystats_surfaces = stats_surfaces(stats)
         m.get_root().html.add_child(title_element(title, stats, mystats_surfaces))
 
-                
+
+    # Ajout du script JavaScript pour activer la carte au clic
+    script = """
+    <script>
+function disableBodyInteractions() {
+    document.body.style.pointerEvents = 'none'; // Désactive toutes les interactions de pointeur sur le body
+}
+
+function enableBodyInteractions() {
+    document.body.style.pointerEvents = 'auto'; // Réactive les interactions de pointeur
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    disableBodyInteractions();
+
+    window.addEventListener('focus', function() {
+        enableInteractions();
+    });
+    window.addEventListener('blur', function() {
+        disableInteractions();
+    });
+});
+    </script>
+    """
+    m.get_root().html.add_child(Element(script))
+
     m.save(path)
     webbrowser.open( "file://" + path, new=2)
 
@@ -598,7 +665,7 @@ def locate_way_path(gpx_segment, G_projected):
 
     if not filtered_edges.empty:
         nearest_edge = filtered_edges.nsmallest(1, 'dist_to_segment').iloc[0]
-        if nearest_edge['dist_to_segment']>10:
+        if nearest_edge['dist_to_segment']>5:
             nearest_edge = {'osmid': 0, 'orientation': segment_orientation, 'dist_to_segment': nearest_edge['dist_to_segment'], 'nearest': nearest_edge, 'geometry': None}
     else:
         nearest_edge = {'osmid': 0, 'orientation': segment_orientation, 'dist_to_segment': None, 'nearest': None, 'geometry': None}

@@ -8,7 +8,8 @@ os.makedirs(output_folder, exist_ok=True)
 os.makedirs(cache_folder, exist_ok=True)
 
 
-images_folder = os.path.expanduser("~/Documents/GitHub/727/images/")
+images_root = os.path.expanduser("~/Documents/GitHub/727/")
+images_folder = os.path.join(images_root,'images/')
 cover_img = os.path.join(assets_dir, "cover.png")
 audio_file = os.path.join(assets_dir,"music.mp3")
 cache_file = os.path.join(cache_folder,"_img2gpx_cache")
@@ -17,7 +18,7 @@ img_trace = os.path.join(output_folder, "_trace.png")
 video_file = os.path.join(output_folder, "_video.mp4")
 logs_file = os.path.join(script_dir, "_logs.txt")
 
-gpx_file="route-727.gpx"
+gpx_file="i727.gpx"
 #gpx_file="route-balaruc.gpx"
 #gpx_file="route-tourmagne.gpx"
 gpx_path = os.path.join(assets_dir, gpx_file)
