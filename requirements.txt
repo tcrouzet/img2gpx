@@ -2,7 +2,7 @@ gpxpy
 moviepy
 geopandas
 matplotlib
-osmx
+osmnx
 requests
 scipy
 tqdm
