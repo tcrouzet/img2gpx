@@ -183,7 +183,6 @@ images = process_img(images_folder, gpx, meters, towns)
 images = sorted(images, key=lambda dico: dico["meters"])
 
 create_yml(images)
-exit()
 
 #Création de l'image de la trace
 #taille_cible = (1920, 1440)
