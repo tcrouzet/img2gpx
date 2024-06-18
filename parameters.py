@@ -2,7 +2,7 @@ import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 assets_dir = f"{script_dir}assets/" 
-output_folder = f"{script_dir}_output/"
+output_folder = os.path.join(script_dir,"_output")
 cache_folder = f"{script_dir}_cache/"
 os.makedirs(output_folder, exist_ok=True)
 os.makedirs(cache_folder, exist_ok=True)
@@ -18,7 +18,7 @@ img_trace = os.path.join(output_folder, "_trace.png")
 video_file = os.path.join(output_folder, "_video.mp4")
 logs_file = os.path.join(script_dir, "_logs.txt")
 
-gpx_file="i727.gpx"
+gpx_file="g727.gpx"
 #gpx_file="route-balaruc.gpx"
 #gpx_file="route-tourmagne.gpx"
 gpx_path = os.path.join(assets_dir, gpx_file)

@@ -25,8 +25,13 @@ def init_cache(name, mode = "pickle"):
         if init_cache.mode == "pickle":
             init_cache.cache_file += ".pkl"
             if os.path.exists(init_cache.cache_file):
-                with open(init_cache.cache_file, 'rb') as fichier_cache:
-                    init_cache.cache = pickle.load(fichier_cache)
+
+                try:
+                    with open(init_cache.cache_file, 'rb') as fichier_cache:
+                        init_cache.cache = pickle.load(fichier_cache)
+                except (pickle.UnpicklingError, EOFError, AttributeError, ImportError, IndexError):
+                    init_cache.cache = {}
+
             else:
                 init_cache.cache = {}
 

@@ -56,6 +56,12 @@ def save_json(path, object):
 
     return True
 
+
+def save_gdf(gdf, file_path):
+    with open(file_path, 'w') as file:
+            file.write(gdf.to_string())
+
+
 # Lecture du fichier GPX
 def gpx_reader(path):
 
@@ -113,6 +119,7 @@ def gpx_elevations(gpx, window_size=150):  # window_size en mètres
     total_distance = distances[-1]
     
     # Appliquer le lissage avec une pondération par la distance
+    j_elevation = 0
     for i, point in enumerate(points):
         weighted_sum, weight_total = 0, 0
         for j, point_j in enumerate(points):
@@ -121,7 +128,10 @@ def gpx_elevations(gpx, window_size=150):  # window_size en mètres
             if distance_ij <= window_size:
                 # Calculer le poids basé sur la distance inverse à la fenêtre
                 weight = 1 - (distance_ij / window_size)
-                weighted_sum += point_j.elevation * weight
+                if point_j.elevation:
+                    j_elevaltion = point_j.elevation
+
+                weighted_sum += j_elevaltion * weight
                 weight_total += weight
         smoothed_elevation = weighted_sum / weight_total if weight_total else point.elevation
         smoothed_elevations.append(smoothed_elevation)
@@ -149,31 +159,3 @@ def calculate_distance(gpx, meters, latitude, longitude):
                 i += 1
 
     return (round(distance), round(from_start))
-
-
-def plot_graph(G_projected, coordinates=None):
-    if coordinates == None:
-        geometries = []
-    elif isinstance(coordinates[0], tuple):  # Liste de points
-        geometries = [Point(lon, lat) for lat, lon in coordinates]
-    else:  # Un seul point
-        lat, lon = coordinates
-        geometries = [Point(lon, lat)]
-
-    # Tracer le graphe
-    fig, ax = osmnx.plot_graph(G_projected, show=False, close=False)
-
-    # Créer un GeoDataFrame pour les points ou les segments
-    if len(geometries) > 0:
-        gdf_points = gpd.GeoDataFrame([{'geometry': geom} for geom in geometries], crs='EPSG:4326')
-        gdf_points_proj = gdf_points.to_crs(G_projected.graph['crs'])
-        
-        # Tracer les points
-        if len(geometries) > 1:
-            # Si plus d'un point, tracer également un segment (LineString) les reliant
-            line = LineString(geometries)
-            gdf_line = gpd.GeoDataFrame([{'geometry': line}], crs='EPSG:4326').to_crs(G_projected.graph['crs'])
-            gdf_line.plot(ax=ax, linewidth=2, color='red')
-        ax.scatter(gdf_points_proj.geometry.x, gdf_points_proj.geometry.y, color='red', zorder=3)
-    
-    plt.show()

@@ -1,5 +1,5 @@
 from shapely.geometry import Point, LineString, Polygon, MultiLineString
-from shapely.ops import linemerge
+from shapely.ops import linemerge, unary_union
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import geopandas as gpd
@@ -18,41 +18,59 @@ from jinja2 import Template
 
 
 class TownManager:
-    def __init__(self):
+    def __init__(self, cache_flag=True):
         self.towns = {}
+        self.cache_flag = cache_flag
+        self.communes_gdf = None
 
     def towns_numering(self):
         return len(self.towns)
 
-    def update_town(self, nom_ville, code_postal, population, web=None, distance_enter=None, distance=None):
-        if not nom_ville:
+    def update_town(self, data, distance_enter=None, distance=None):
+        if not data['name']:
             exit("Nom de ville requis")
 
-        if nom_ville in self.towns:
+        if data['name'] in self.towns:
             if distance is not None:
-                self.towns[nom_ville]['distance'] += distance
-        else:
-            if distance_enter is not None and distance is not None:
-                self.towns[nom_ville] = {
+                self.towns[data['name']]['distance'] += distance
+        elif distance_enter is not None and distance is not None:
+                self.towns[data['name']] = {
                     'distance_enter': distance_enter,
                     'distance': distance,
-                    'code_postal': code_postal.split(";")[0],
-                    'population': population,
-                    'web': web,
+                    'code_postal': data['postal_code'],
+                    'code_ville': data['town_code'],
+                    'population': data['population'],
+                    'web': data['web'],
                     }
-                
+        else:
+            print("Problem update town", data['name'], distance_enter, distance)
+
+
     def get_town_names(self):
         return list(self.towns.keys())
+
 
     def get_postal_codes(self):
         return [info['code_postal'] for info in self.towns.values()]
     
-    def print(self):
+
+    def get_town_codes(self):
+        return [info['code_ville'] for info in self.towns.values()]
+
+
+    def vformat(self):
+        msg = ""
         for index, (nom_ville, infos) in enumerate(self.towns.items()):
             enter = meter_2_km(infos['distance_enter'])
             lisible = distance_lisible(infos['distance'])
 
-            print(f"{index}. {self.town_md(nom_ville)} km{enter} {lisible} {infos['code_postal']} {infos['population']} {infos['web']}\n")
+            # {infos['population']} {infos['web']} 
+            msg += f"{index+1}. {self.town_md(nom_ville)} km{enter} {lisible}"
+            #msg += f" {infos['code_postal']}"
+            #msg += f" {infos['code_ville']}"
+            msg += "\n\n"
+        return msg
+
 
     def town_md(self,nom_ville):
         
@@ -61,15 +79,144 @@ class TownManager:
         else:
             return nom_ville
 
+
     def town_info(self,nom_ville):
         print(self.towns[nom_ville])
+
 
     def __iter__(self):
         for index, (nom_ville, infos) in enumerate(self.towns.items()):
             yield index, nom_ville, infos
 
 
-class WayInfo:
+    def gpx_villes(self, gpx, meters):
+
+        total_points = sum(len(segment.points) for track in gpx.tracks for segment in track.segments)
+        pbar = tqdm(total=total_points, desc='Towns in GPX:')
+
+        now_town = None
+        now_town_name = None
+
+        for track in gpx.tracks:
+            for segment in track.segments:
+                points = segment.points
+                for i, point in enumerate(points):
+
+                    pbar.update(1)
+
+                    #filter
+                    if i>0 and i<total_points-2 and meters[i]-meters[last_point]<200:
+                        continue
+
+                    last_point = i
+                    town_data = self.locate_point_in_town(point.latitude, point.longitude)
+                    if town_data['name'] != now_town_name:
+                        if now_town:
+                            #On quitte la now_town
+                            distance = meters[i]-distance_enter_town
+                            distance_enter = distance_enter_town
+                            self.update_town(town_data, distance_enter, distance)
+                            #print(town_name)
+                            
+                        #On entre a new town
+                        distance_enter_town = meters[i]
+                        now_town = town_data
+                        now_town_name = town_data['name']
+
+        distance = meters[i-1]-distance_enter_town
+        self.update_town(town_data, distance_enter_town, distance)
+                    
+        pbar.close()
+
+
+    def locate_point_in_town(self, lat, lon):
+
+        hash = cache.create_hash((lat,lon),'locate_point')
+        found, cached_result = cache.get_cache(hash)
+        if found and self.cache_flag:
+            return cached_result
+        
+        location = Point(lon, lat)
+        
+        # Vérifier dans quelle commune se trouve le point
+        for _, row in self.communes_gdf.iterrows():
+            if location.within(row['geometry']):
+                postal_code = row['postal_code'].split(";")[0].strip() #Premier code quand plusieurs
+                if 'ref:INSEE' in row:
+                    town_code = row['ref:INSEE'].strip()
+                else:
+                    town_code = postal_code
+
+                web = row['website'].strip() if 'website' in row and isinstance(row['website'], str) and row['website'].lower() != 'nan' else ""
+                
+                response = {
+                    'name': row['name'].strip(),
+                    'postal_code': postal_code,
+                    'town_code': town_code,
+                    'population': row['population'],
+                    'web': web
+                    }
+
+                cache.into_cache(hash, response)
+                return response
+        
+        return None
+
+
+    def cities(self, frame):
+        """communes_gdf = toutes les villes dans la frame"""
+
+        hash = cache.create_hash(frame,'cities')
+        found, cached_result = cache.get_cache(hash)
+        if found:
+            self.communes_gdf = cached_result
+            return True
+
+        gpx_bbox = (frame['max_lat'], frame['min_lat'], frame['max_lon'], frame['min_lon'])
+        self.communes_gdf = osmnx.features.features_from_bbox(bbox=gpx_bbox, tags={'admin_level': '8'})
+
+        cache.into_cache(hash, self.communes_gdf)
+        return True
+
+
+    def get_traversed_communes_gdf(self):
+        noms_de_villes = self.get_town_names()
+        #codes_postaux = self.get_postal_codes()
+        codes_villes = self.get_town_codes()
+
+        traversed_communes = self.communes_gdf[
+            (self.communes_gdf['name'].isin(noms_de_villes)) & 
+            (self.communes_gdf['ref:INSEE'].isin(codes_villes))
+        ]
+
+        return traversed_communes
+
+
+    def geometry_by_code(self, code):
+
+        code = str(code).strip()
+
+        field = 'ref:INSEE'
+
+        self.communes_gdf[field] = self.communes_gdf[field].str.strip()
+
+        if code not in self.communes_gdf[field].values:
+            exit("Not a code")
+
+        commune = self.communes_gdf[self.communes_gdf[field] == code]
+        if not commune.empty:
+            #print(commune)
+            return commune
+        else:
+            print(self.communes_gdf[['name', 'postal_code']].head(10))
+
+            exit(f"Aucune commune trouvée avec le code postal {code}")
+
+    def check_columns(self):
+        print(self.communes_gdf.columns)
+
+
+class Infos:
     def __init__(self, distance, elevation, town, way, segment):
         self.distance = distance
         if elevation>=0:
@@ -80,137 +227,14 @@ class WayInfo:
             self.elevationNegatif = elevation
         self.town = town
         self.way = way
+        self.osmid = way['osmid']
         self.segment = segment
         self.title = None
         self.tags = None
         self.terrain = ""
 
-
-    def print_info(self):
-        print(f"Distance: {self.distance}, Elevation: {self.elevation}, Town: {self.town}, Segment: {self.segment}, Title: {self.title}")
-        print(self.way)
-        print(self.tags)
-        #print(self.way['Name'].to_string())
-        ##all_properties = dir(self)
-        #properties = {prop: getattr(self, prop) for prop in all_properties if not callable(getattr(self, prop)) and not prop.startswith('__')}
-        #print(properties)
-
-    def print_object(obj):
-        return True
-        if(isinstance(obj,dict)):
-            for key, value in obj.items():
-                print(f"{key} : {value}")
-        else:
-            attributes = dir(obj)
-            for attr in attributes:
-                # Filtrer les méthodes et attributs spéciaux
-                if not callable(getattr(obj, attr)) and not attr.startswith('__'):
-                    print(f"{attr} : {getattr(obj, attr)}")
-
     def update_tags(self,tags):
         self.tags = tags
-
-
-    def double_get(self,key):
-        if self.tags:
-            valeur = self.tags.get(key, '').lower()
-            if valeur:
-                return valeur
-        valeur = self.way.get(key, '').lower()
-        return valeur
-
-
-    def find_terrain(self):
-
-        if not is_osmid_positive(self.way['osmid']):
-            return "Unknown"
-        
-
-        surface = self.double_get('surface')
-        cycleway = self.double_get('cycleway')
-        bicycle = self.double_get('bicycle')
-        highway = self.double_get('highway')
-        if 'name' in self.way:
-            name = get_first_string(self.way['name']).lower()
-        else:
-            name = ""
-
-        #if cycleway == 'yes' or cycleway == 'sidewalk' or highway == 'cycleway':
-        if cycleway == 'yes' or cycleway == 'sidewalk' or bicycle == 'designated' or bicycle == 'yes' or highway == 'cycleway':
-            if surface == 'gravel':
-                pass
-            elif highway == 'track':
-                pass
-            elif surface == 'compacted':
-                return 'CompactedCycleway'
-            else:
-                return 'AsphaltedCycleway'
-
-        if highway == 'unclassified':
-            if 'route' in name:
-                return  'SmallRoad'
-            if 'rue' in name:
-                return 'Street'
-            if 'asphalt' in surface:
-                return 'SmallRoad'
-            source = self.way.get('source', '').lower()
-            if 'bing' in source:
-                return 'SmallRoad'
-            if 'chemin' in name:
-                return 'Track1'
-            return 'Unclassified'
-
-        if highway == 'motorway' or highway == 'trunk' or highway == 'primary' :
-            return 'MainRoad'
-
-        if highway == 'secondary' or highway == 'secondary_link':
-            return 'SecondaryRoad'
-
-        if highway == 'tertiary':
-            return WayInfo.is_street(name,'SmallRoad')
-
-        if highway == 'residential' or highway == 'living_street':
-            return WayInfo.is_street(name,'Street')
-
-        if highway == 'track':
-            tracktype = self.double_get('tracktype')
-            tracktype = tracktype.replace('grade','')
-            if tracktype == "":
-                return 'Track0'
-            return 'Track'+tracktype
-
-        if highway == 'path' or highway == 'footway' or highway == 'pedestrian' or highway == 'steps':
-            return 'Path'
-
-        if highway == 'proposed':
-            proposed = self.double_get('proposed')
-            if proposed == 'path':
-                return 'Path'
-            if proposed == 'track':
-                return 'Track1'
-            return 'Unclassified'
-
-        if highway == 'service':
-            tracktype = ""
-            if self.double_get('tracktype'):
-                tracktype = self.double_get('tracktype')
-                tracktype = tracktype.replace('grade','')
-                return 'Track'+tracktype
-            if 'rue' in name:
-                return 'Street'
-
-            return 'Track1'
-
-        return 'Unknown'
-
-
-    def is_street(name,type):
-        if 'boulevard' in name or 'avenue' in name:
-            return 'MainStreet'
-        if 'rue' or 'impasse' in name:
-            return 'Street'
-        return type
-
 
     def update_title(self):
 
@@ -219,13 +243,13 @@ class WayInfo:
             self.terrain = "Unknown"
             return True
         
-        WayInfo.print_object(self.way)
+        #self.print_object(self.way)
 
         self.terrain = self.find_terrain()
-        print(self.terrain+"\n")
+        #print(self.terrain+"\n")
 
         if 'name' in self.way:
-            name = get_first_string(self.way['name']).lower()
+            name = self.get_first_string(self.way['name']).lower()
             if name == "nan":
                 name = ""
         else:
@@ -263,6 +287,405 @@ class WayInfo:
 
         self.title = title[0].upper() + title[1:] if title else title
 
+    def get_first_string(self, value):
+        if isinstance(value, list):
+            return value[0] if value else None
+        return str(value)
+
+    def double_get(self, key):
+        if self.tags:
+            valeur = self.tags.get(key, '').lower()
+            if valeur:
+                return valeur
+        valeur = self.way.get(key, '').lower()
+        return valeur
+
+
+    def find_terrain(self):
+
+        if not is_osmid_positive(self.way['osmid']):
+            return "Unknown"
+        
+        surface = self.double_get('surface')
+        cycleway = self.double_get('cycleway')
+        bicycle = self.double_get('bicycle')
+        highway = self.double_get('highway')
+        if 'name' in self.way:
+            name = self.get_first_string(self.way['name']).lower()
+        else:
+            name = ""
+
+        #if cycleway == 'yes' or cycleway == 'sidewalk' or highway == 'cycleway':
+        if cycleway == 'yes' or cycleway == 'sidewalk' or bicycle == 'designated' or bicycle == 'yes' or highway == 'cycleway':
+            if surface == 'gravel':
+                pass
+            elif highway == 'track':
+                pass
+            elif surface == 'compacted':
+                return 'CompactedCycleway'
+            else:
+                return 'AsphaltedCycleway'
+
+        if highway == 'unclassified':
+            if 'route' in name:
+                return  'SmallRoad'
+            if 'rue' in name:
+                return 'Street'
+            if 'asphalt' in surface:
+                return 'SmallRoad'
+            source = self.way.get('source', '').lower()
+            if 'bing' in source:
+                return 'SmallRoad'
+            if 'chemin' in name:
+                return 'Track1'
+            return 'Unclassified'
+
+        if highway == 'motorway' or highway == 'trunk' or highway == 'primary' :
+            return 'MainRoad'
+
+        if highway == 'secondary' or highway == 'secondary_link':
+            return 'SecondaryRoad'
+
+        if highway == 'tertiary':
+            return self.is_street(name,'SmallRoad')
+
+        if highway == 'residential' or highway == 'living_street':
+            return self.is_street(name,'Street')
+
+        if highway == 'track':
+            tracktype = self.double_get('tracktype')
+            tracktype = tracktype.replace('grade','')
+            if tracktype == "":
+                return 'Track0'
+            return 'Track'+tracktype
+
+        if highway == 'path' or highway == 'footway' or highway == 'pedestrian' or highway == 'steps':
+            return 'Path'
+
+        if highway == 'proposed':
+            proposed = self.double_get('proposed')
+            if proposed == 'path':
+                return 'Path'
+            if proposed == 'track':
+                return 'Track1'
+            return 'Unclassified'
+
+        if highway == 'service':
+            tracktype = ""
+            if self.double_get('tracktype'):
+                tracktype = self.double_get('tracktype')
+                tracktype = tracktype.replace('grade','')
+                return 'Track'+tracktype
+            if 'rue' in name:
+                return 'Street'
+
+            return 'Track1'
+
+        return 'Unknown'
+
+    def is_street(self, name,type):
+        if 'boulevard' in name or 'avenue' in name:
+            return 'MainStreet'
+        if 'rue' or 'impasse' in name:
+            return 'Street'
+        return type
+
+    
+    def print_info(self):
+        return
+        print(f"Distance: {self.distance}, Elevation: {self.elevation}, Town: {self.town}, Segment: {self.segment}, Title: {self.title}")
+        print(self.way)
+        print(self.tags)
+        #print(self.way['Name'].to_string())
+        ##all_properties = dir(self)
+        #properties = {prop: getattr(self, prop) for prop in all_properties if not callable(getattr(self, prop)) and not prop.startswith('__')}
+        #print(properties)
+
+    def print_object(self, obj):
+        return True
+        if(isinstance(obj,dict)):
+            for key, value in obj.items():
+                print(f"{key} : {value}")
+        else:
+            attributes = dir(obj)
+            for attr in attributes:
+                # Filtrer les méthodes et attributs spéciaux
+                if not callable(getattr(obj, attr)) and not attr.startswith('__'):
+                    print(f"{attr} : {getattr(obj, attr)}")
+
+
+class Ways:
+
+    def __init__(self, output_folder, flag_cache = True):
+
+        self.ways_graph = None
+        self.polygon_frames = None
+
+        self.flag_cache = flag_cache
+        self.output_folder = output_folder
+
+        self.previous_edge = self.init_edge()
+        self.nodes_gdf = None
+
+        self.max_distance_km=20
+
+
+    def init_edge(self):
+        return {'osmid': 0, 'name': '', 'dist_to_segment': None, 'nearest': None, 'geometry': None}
+
+
+    def locate_way(self, lat, lon, cache_flag = True):
+
+        hash = cache.create_hash((lat,lon), 'locate_way')
+        if self.flag_cache and cache_flag:
+            found, cached_result = cache.get_cache(hash)
+            if found:
+                return cached_result
+
+        if self.nodes_gdf is None:
+            self.nodes_gdf = osmnx.graph_to_gdfs(self.ways_graph, nodes=True, edges=False)
+
+        # Convertir le point en format Shapely et le segment GPX en LineString
+        point_geom = Point(lon, lat)  # Conversion en (lon, lat)
+        
+        # Transformer les coordonnées si nécessaire
+        gdf_point = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[point_geom])
+        gdf_point_proj = gdf_point.to_crs(self.ways_graph.graph['crs'])
+        point_proj = gdf_point_proj.geometry.iloc[0]
+
+        #Teste si point sur ancien edge
+        if self.previous_edge is not None and self.previous_edge['osmid'] != 0:
+            if 'geometry' in self.previous_edge and self.previous_edge['geometry'] is not None:
+                distance = gdf_point_proj.distance(self.previous_edge['geometry']).iloc[0]
+                if distance<5:
+                    cache.into_cache(hash, self.previous_edge)
+                    return self.previous_edge
+    
+        # Trouver tous les nœuds dans le rayon R autour du point
+        radius = 500
+        self.nodes_gdf['dist_to_point'] = self.nodes_gdf.geometry.distance(point_proj)
+        self.nodes_within_radius = self.nodes_gdf[self.nodes_gdf['dist_to_point'] <= radius].index.tolist()
+
+        min_distance = float('inf')
+
+        nearest_edge = self.init_edge()
+
+        # Parcourir les arêtes entre ces nœuds pour trouver la plus proche du segment GPX
+        for u, v, data in self.ways_graph.edges(data=True):
+            if u in self.nodes_within_radius or v in self.nodes_within_radius:
+                edge_geom = data['geometry'] if 'geometry' in data else LineString([Point(self.ways_graph.nodes[n]['x'], self.ways_graph.nodes[n]['y']) for n in (u, v)])
+
+                distance = point_proj.distance(edge_geom)
+                if distance < min_distance:
+                    min_distance = distance
+                    if 'geometry' not in nearest_edge:
+                        nearest_edge['geometry'] = None
+                    nearest_edge = data
+        
+        self.previous_edge = nearest_edge
+        cache.into_cache(hash,nearest_edge)
+        return nearest_edge
+
+
+    def polygons_ways(self):
+        """Pour tous les polygones remonter données OSM"""
+
+        hash = cache.create_hash(self.polygon_frames,'polygons_ways')
+        if self.flag_cache:
+            found, cached_result = cache.get_cache(hash)
+            if found:
+                self.ways_graph = cached_result
+                return
+
+        combined_graph = nx.MultiDiGraph()
+
+        print("Polygons in frame:",len(self.polygon_frames))
+        pbar = tqdm(total=len(self.polygon_frames), desc='Ways:')
+        for polygon in self.polygon_frames:
+            pbar.update(1)
+            graph = self.polygon_ways(polygon)
+            combined_graph = nx.compose(combined_graph, graph)
+        pbar.close()
+
+        #Passer en système métrique 
+        combined_graph = osmnx.project_graph(combined_graph)
+
+        cache.into_cache(hash, combined_graph)
+        self.ways_graph = combined_graph
+        return
+
+
+    def polygon_ways(self, polygon):
+        """Pour un polygon retourne les données OSM"""
+
+        hash = cache.create_hash(polygon,'osm_ways')
+        if self.flag_cache:
+            found, cached_result = cache.get_cache(hash)
+            if found:
+                return cached_result
+        
+        #Récupère OSM ways
+        G = osmnx.graph_from_polygon(polygon, network_type='all')
+
+        cache.into_cache(hash, G)
+        return G
+
+
+    def gpx_2_polygons(self, gpx, meters):
+        """Transformation de la trace gpx en polygones conteneurs"""
+
+        self.polygon_frames = []
+        current_segment = []
+        
+        # Initialiser le point précédent
+        prev_point = None
+        distance_enter = 0
+
+        print("tacks:",len(gpx.tracks))
+        for track in gpx.tracks:
+            print("segments:",len(track.segments))
+            for segment in track.segments:
+                pbar = tqdm(total=len(segment.points), desc='Polygons:')
+                for i, point in enumerate(segment.points):
+                    pbar.update(1)
+                    if prev_point is None:
+                        # Premier point du segment
+                        current_segment.append((point.longitude, point.latitude))
+                    else:
+                        # Calculer la distance depuis le dernier point
+                        distance = meters[i]-distance_enter
+                        if distance > self.max_distance_km*1000:
+                            # Distance maximale atteinte, créer un polygone avec le segment actuel
+                            if len(current_segment) > 2:
+                                poly = Polygon(LineString(current_segment).buffer(0.01))  # 0.01 degré de buffer
+                                if poly.is_valid:
+                                    self.polygon_frames.append(poly)
+                                else:
+                                    print(f"Invalid polygon skipped…")
+                            # Réinitialiser current_segment et ajouter le point actuel
+                            current_segment = [(point.longitude, point.latitude)]
+                            distance_enter = meters[i]
+                        else:
+                            # Ajouter le point au segment actuel
+                            current_segment.append((point.longitude, point.latitude))
+                    prev_point = (point.latitude, point.longitude)
+                pbar.close()
+        
+        # Traiter le dernier segment
+        if len(current_segment) > 2:
+            poly = Polygon(LineString(current_segment).buffer(0.01))
+            self.polygon_frames.append(poly)
+
+        return
+
+
+
+    def plot_graph(self, graph, coordinates=None):
+        if graph is None:
+            raise ValueError("The graph attribute is not initialized.")
+        if coordinates == None:
+            geometries = []
+        elif isinstance(coordinates[0], tuple):  # Liste de points
+            geometries = [Point(lon, lat) for lat, lon in coordinates]
+        else:  # Un seul point
+            lat, lon = coordinates
+            geometries = [Point(lon, lat)]
+
+        # Tracer le graphe
+        fig, ax = osmnx.plot_graph(graph, show=False, close=False)
+
+        # Créer un GeoDataFrame pour les points ou les segments
+        if len(geometries) > 0:
+            gdf_points = gpd.GeoDataFrame([{'geometry': geom} for geom in geometries], crs='EPSG:4326')
+            gdf_points_proj = gdf_points.to_crs(self.ways_graph.graph['crs'])
+            
+            # Tracer les points
+            if len(geometries) > 1:
+                # Si plus d'un point, tracer également un segment (LineString) les reliant
+                line = LineString(geometries)
+                gdf_line = gpd.GeoDataFrame([{'geometry': line}], crs='EPSG:4326').to_crs(self.ways_graph.graph['crs'])
+                gdf_line.plot(ax=ax, linewidth=2, color='red')
+            ax.scatter(gdf_points_proj.geometry.x, gdf_points_proj.geometry.y, color='red', zorder=3)
+        
+        plt.savefig( os.path.join(self.output_folder,"graph.png"), dpi=300 )
+        plt.close()
+    
+
+    def graph_to_polygons(self, graph):
+        """Génère une liste de polygones ou de lignes à partir des arêtes d'un graphe."""
+        if graph is None:
+            raise ValueError("The graph attribute is not initialized.")
+        
+        geometries = []
+        for u, v, data in graph.edges(data=True):
+            if 'geometry' in data:
+                # Si l'arête a une géométrie, utilisez-la directement
+                geometries.append(data['geometry'])
+            else:
+                # Sinon, créez une ligne entre les deux nœuds
+                point_u = Point((graph.nodes[u]['x'], graph.nodes[u]['y']))
+                point_v = Point((graph.nodes[v]['x'], graph.nodes[v]['y']))
+                line = LineString([point_u, point_v])
+                geometries.append(line)
+        
+        # Optionnel : Transformer les LineString en Polygon si nécessaire
+        polygons = []
+        for geom in geometries:
+            if isinstance(geom, LineString):
+                buffer_polygon = geom.buffer(0.0001)  # Ajuster la valeur du buffer si nécessaire
+                polygons.append(buffer_polygon)
+            else:
+                polygons.append(geom)
+        
+        print("Graph to polygons done")
+        return polygons
+
+
+    def plot_graph_folium(self, graph, coordinates=None):
+        if graph is None:
+            raise ValueError("The graph attribute is not initialized.")
+        
+        # Initialiser les polygones (ici nous utiliserons uniquement les arêtes du graphe pour la visualisation)
+        polygons = []
+        for u, v, data in graph.edges(data=True):
+            if 'geometry' in data:
+                polygons.append(data['geometry'])
+            else:
+                point_u = Point((graph.nodes[u]['x'], graph.nodes[u]['y']))
+                point_v = Point((graph.nodes[v]['x'], graph.nodes[v]['y']))
+                line = LineString([point_u, point_v])
+                polygons.append(line)
+        
+        if polygons:
+            # Utiliser le premier point du premier polygone pour centrer la carte
+            central_point = list(polygons[0].coords)[0]
+            m = folium.Map(location=[central_point[1], central_point[0]], zoom_start=12)
+            
+            # Ajouter chaque polygone à la carte
+            for poly in polygons:
+                # Conversion des coordonnées du polygone pour Folium ([latitude, longitude])
+                poly_coords = [[p[1], p[0]] for p in poly.coords]
+                folium.PolyLine(locations=poly_coords,
+                                color='blue',
+                                weight=2).add_to(m)
+            
+            # Ajouter les points/segments supplémentaires si fournis
+            if coordinates:
+                if isinstance(coordinates[0], tuple):  # Liste de points
+                    for lat, lon in coordinates:
+                        folium.Marker(location=[lat, lon], icon=folium.Icon(color='red')).add_to(m)
+                else:  # Un seul point
+                    lat, lon = coordinates
+                    folium.Marker(location=[lat, lon], icon=folium.Icon(color='red')).add_to(m)
+            
+            map_file = os.path.join(output_folder, "_map.html")
+            m.save(map_file)
+            webbrowser.open("file://" + map_file, new=2)
+        else:
+            raise ValueError("No polygons to display in the graph.")
+
+
+
 
 def is_in(search, variable):
     if isinstance(variable, str) and variable == search:
@@ -272,24 +695,6 @@ def is_in(search, variable):
     else:
         return False
 
-
-def is_osmid_positive(osmid):
-    # Si osmid est un entier, vérifier s'il est positif
-    if isinstance(osmid, int):
-        return osmid > 0
-    
-    # Si osmid est une liste, vérifier si tous les éléments sont positifs
-    elif isinstance(osmid, list):
-        return all(item > 0 for item in osmid)
-    
-    # Retourne False si osmid n'est ni un entier ni une liste
-    else:
-        return False
-    
-def get_first_string(value):
-    if isinstance(value, list):
-        return value[0] if value else None
-    return str(value)
 
 
 def terrain_color(terrain):
@@ -304,9 +709,9 @@ def terrain_color(terrain):
     if terrain=='Path':
         return '#FF4500' #Sun red-orange
     if terrain=='Unclassified':
-        return '#A569BD' #Purple twilight
+        return '#BA55D3' #Purple https://web-color.aliasdmc.fr/couleur-web-violet-rgb-hsl-hexa.html
     if terrain=='Unknown':
-        return '#FD6C9E' #Rose
+        return '#8B008B' #Pulple dark
     return "#000000"
         
 
@@ -475,6 +880,85 @@ def title_element(title_text, stats, bilan):
     title_element = Element(title_html)
     return title_element
 
+
+def folium_minimal(path, communes_gdf, gpx):
+
+    mode = 'default'
+    m = folium.Map(tiles='CartoDB positron') #Fond casi blanc
+
+    bounds = communes_gdf.total_bounds
+    m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+
+    # Ajouter les polygones des communes à la carte
+    for index, commune in communes_gdf.iterrows():
+        folium.GeoJson(
+            data=commune['geometry'],
+            style_function=lambda x: {'fillColor': 'gray', 'color': 'black', 'weight': 0.5},
+        ).add_to(m)
+
+    for track in gpx.tracks:
+        for segment in track.segments:
+            points = [(point.latitude, point.longitude) for point in segment.points]
+            folium.PolyLine(points, color='red', weight=3, opacity=0.5).add_to(m)
+
+    m.save(path)
+    webbrowser.open( "file://" + path, new=2)
+
+
+def osm_url(osm_id, osm_type):
+    base_url = "https://www.openstreetmap.org/"
+    if osm_type not in ['node', 'way', 'relation']:
+        raise ValueError("Type d'objet OSM invalide. Utiliser 'node', 'way' ou 'relation'.")
+    
+    return f"{base_url}{osm_type}/{osm_id}"
+
+
+def folium_ways2(path, communes_gdf, ways, title="Trace"):
+
+    m = folium.Map(tiles='CartoDB positron')  # Fond casi blanc
+
+    bounds = communes_gdf.total_bounds
+    m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+
+    # Ajouter les polygones des communes à la carte
+    for _, commune in communes_gdf.iterrows():
+        folium.GeoJson(
+            data=commune['geometry'],
+            style_function=lambda x: {'fillColor': 'gray', 'color': 'black', 'weight': 0.5},
+        ).add_to(m)
+
+    filter = 0.001
+
+    # Ajouter les segments de voies sans regroupement
+    for way in ways:
+        segment = way.segment  # Extraction du segment
+        osmid = way.osmid
+        terrain = way.terrain
+        osm_link = osm_url(osmid, 'way')
+        popup_html = f'<a href="{osm_link}" target="_blank">OSMID: {osmid}</a>'
+
+        coords = [(lat, lon) for lat, lon in segment]  # Extraction des coordonnées
+
+        color = terrain_color(terrain)
+        folium.PolyLine(
+            locations=coords,
+            color=color,
+            weight=4,
+            opacity=1,
+            bubblingMouseEvents=True,
+            popup=folium.Popup(popup_html, max_width=300)
+
+        ).add_to(m)
+
+    stats = ways_stats(ways)
+    mystats_surfaces = stats_surfaces(stats)
+    m.get_root().html.add_child(title_element(title, stats, mystats_surfaces))
+
+    m.save(path)
+    webbrowser.open("file://" + path, new=2)
+
+
+
 def plot_communes_folium(path, communes_gdf, gpx=None, title="Trace"):
 
     mode = 'default'
@@ -565,65 +1049,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     m.save(path)
     webbrowser.open( "file://" + path, new=2)
-
-
-def locate_way(lat, lon, G_projected, flag_cache=True):
-
-    hash = cache.create_hash((lat,lon), 'locate_way')
-    if flag_cache:
-        found, cached_result = cache.get_cache(hash)
-        if found:
-             return cached_result
-    
-    if not hasattr(locate_way, "previous_edge"):
-        locate_way.previous_edge = None
-        print("No cahe: locate_way")
-
-    if not hasattr(locate_way, "nodes_gdf"):
-        locate_way.nodes_gdf = osmnx.graph_to_gdfs(G_projected, nodes=True, edges=False)
-
-    # Convertir le point en format Shapely et le segment GPX en LineString
-    point_geom = Point(lon, lat)  # Conversion en (lon, lat)
-    
-    # Transformer les coordonnées si nécessaire
-    gdf_point = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[point_geom])
-    gdf_point_proj = gdf_point.to_crs(G_projected.graph['crs'])
-    point_proj = gdf_point_proj.geometry.iloc[0]
-
-    #Teste si point sur ancien edge
-    if locate_way.previous_edge is not None:
-        if 'geometry' in locate_way.previous_edge and locate_way.previous_edge['geometry'] is not None:
-            distance = gdf_point_proj.distance(locate_way.previous_edge['geometry']).iloc[0]
-            if distance<5:
-                cache.into_cache(hash, locate_way.previous_edge)
-                return locate_way.previous_edge
-            
- 
-    # Trouver tous les nœuds dans le rayon R autour du point
-    radius = 500
-    #nodes_gdf = osmnx.graph_to_gdfs(G_projected, nodes=True, edges=False)
-    locate_way.nodes_gdf['dist_to_point'] = locate_way.nodes_gdf.geometry.distance(point_proj)
-    locate_way.nodes_within_radius = locate_way.nodes_gdf[locate_way.nodes_gdf['dist_to_point'] <= radius].index.tolist()
-
-    min_distance = float('inf')
-
-    nearest_edge = {'osmid': 0, 'name': '', 'dist_to_segment': None, 'nearest': None, 'geometry': None}
-
-    # Parcourir les arêtes entre ces nœuds pour trouver la plus proche du segment GPX
-    for u, v, data in G_projected.edges(data=True):
-        if u in locate_way.nodes_within_radius or v in locate_way.nodes_within_radius:
-            edge_geom = data['geometry'] if 'geometry' in data else LineString([Point(G_projected.nodes[n]['x'], G_projected.nodes[n]['y']) for n in (u, v)])
-
-            distance = point_proj.distance(edge_geom)
-            if distance < min_distance:
-                min_distance = distance
-                if 'geometry' not in nearest_edge:
-                    nearest_edge['geometry'] = None
-                nearest_edge = data
-    
-    locate_way.previous_edge = nearest_edge
-    cache.into_cache(hash,nearest_edge)
-    return nearest_edge
 
 
 #Plus lens et moins précis que locate_way
@@ -724,44 +1149,6 @@ def ways(frame):
     return osmnx.project_graph(G)
 
 
-def polygon_ways(polygon,flag_cache=True):
-
-    hash = cache.create_hash(polygon,'polygon_ways')
-    if flag_cache:
-        found, cached_result = cache.get_cache(hash)
-        if found:
-            return osmnx.project_graph(cached_result)
-    
-    G = osmnx.graph_from_polygon(polygon, network_type='all')
-
-    cache.into_cache(hash, G)
-    #Passer en système métrique 
-    return osmnx.project_graph(G)
-
-
-def polygons_ways(polygons,flag_cache=True):
-
-    hash = cache.create_hash(polygons,'polygons_ways')
-    if flag_cache:
-        found, cached_result = cache.get_cache(hash)
-        if found:
-            return cached_result
-
-    #graph_list = []
-    combined_graph = nx.MultiDiGraph()
-
-    for polygon in polygons:
-        graph = polygon_ways(polygon, flag_cache)
-        combined_graph = nx.compose(combined_graph, graph)
-        #graph_list.append(graph)
-
-    #combined_graph = osmnx.utils_graph.combine_graphs(graph_list)
-    combined_graph = osmnx.project_graph(combined_graph)
-    cache.into_cache(hash, combined_graph)
-
-    return combined_graph
-
-
 def gpx_polygon(gpx):
 
     gpx_points = []
@@ -786,45 +1173,10 @@ def gpx_polygon(gpx):
         exit("Pas assez de points pour former un polygone.")
 
 
-def gpx_polygons(gpx, meters, max_distance_km=300):
-    polygons = []
-    current_segment = []
-    
-    # Initialiser le point précédent
-    prev_point = None
-    distance_enter = 0
-
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for i, point in enumerate(segment.points):
-                if prev_point is None:
-                    # Premier point du segment
-                    current_segment.append((point.longitude, point.latitude))
-                else:
-                    # Calculer la distance depuis le dernier point
-                    #distance = geopy.distance.distance(prev_point, (point.latitude, point.longitude)).km
-                    distance = meters[i]-distance_enter
-                    if distance > max_distance_km*1000:
-                        # Distance maximale atteinte, créer un polygone avec le segment actuel
-                        if len(current_segment) > 2:
-                            poly = Polygon(LineString(current_segment).buffer(0.01))  # 0.01 degré de buffer
-                            polygons.append(poly)
-                            current_segment = [(point.longitude, point.latitude)]
-                            distance_enter = meters[i]
-                    else:
-                        # Ajouter le point au segment actuel
-                        current_segment.append((point.longitude, point.latitude))
-                prev_point = (point.latitude, point.longitude)
-    
-    # Traiter le dernier segment
-    if len(current_segment) > 2:
-        poly = Polygon(LineString(current_segment).buffer(0.01))  # Ajuster le buffer selon le besoin
-        polygons.append(poly)
-    
-    return polygons
 
 
 def show_polygons(polygons):
+    "Visualise polygron frame"
     if polygons:
         central_point = list(polygons[0].exterior.coords)[0]
 
@@ -965,78 +1317,20 @@ def stats_surfaces(stats_input):
     km = distance_lisible(total_distance)
     return f"{km}\n+{elevation_lisible(total_elevation)}\n{asphalt}% asphalt\n{ground}% tracks\n{path}% single tracks"
 
-def locate_point_in_town(lat, lon, towns_gdf):
 
-    hash = cache.create_hash((lat,lon),'locate_point')
-    found, cached_result = cache.get_cache(hash)
-    if found:
-        return cached_result
+
+def is_osmid_positive(osmid):
+    # Si osmid est un entier, vérifier s'il est positif
+    if isinstance(osmid, int):
+        return osmid > 0
     
-    location = Point(lon, lat)
+    # Si osmid est une liste, vérifier si tous les éléments sont positifs
+    elif isinstance(osmid, list):
+        return all(item > 0 for item in osmid)
     
-    # Vérifier dans quelle commune se trouve le point
-    for _, row in towns_gdf.iterrows():
-        if location.within(row['geometry']):
-            response = (row['name'], row['postal_code'], row['population'], row['website'])
-            cache.into_cache(hash, response)
-            return response
-    
-    return ""
-
-
-def gpx_villes(gpx,meters,towns_gdf,towns_info):
-
-    total_points = sum(len(segment.points) for track in gpx.tracks for segment in track.segments)
-    pbar = tqdm(total=total_points, desc='Towns in GPX:')
-
-    now_town = None
-    now_town_name = None
-
-    for track in gpx.tracks:
-        for segment in track.segments:
-            points = segment.points
-            for i, point in enumerate(points):
-
-                pbar.update(1)
-
-                #filter
-                if i>0 and i<total_points-2 and meters[i]-meters[last_point]<200:
-                    continue
-
-                last_point = i
-                town_tuple = locate_point_in_town(point.latitude, point.longitude, towns_gdf)
-                if town_tuple[0] != now_town_name:
-                    if now_town:
-                        #On quitte la now_town
-                        (town_name,postal_code,population,website) = now_town
-                        distance = meters[i]-distance_enter_town
-                        distance_enter = distance_enter_town
-                        towns_info.update_town(town_name, postal_code, population, website, distance_enter, distance)
-                        
-                    #On entre a new town
-                    distance_enter_town = meters[i]
-                    now_town = town_tuple
-                    now_town_name = now_town[0]
-
-    distance = meters[i-1]-distance_enter_town
-    (town_name,postal_code,population,website) = town_tuple
-    towns_info.update_town(town_name, postal_code, population, website, distance_enter_town, distance)
-                
-    pbar.close()
-
-
-def cities(frame):
-
-    hash = cache.create_hash(frame,'cities')
-    found, cached_result = cache.get_cache(hash)
-    if found:
-        return cached_result
-
-    gpx_bbox = (frame['max_lat'], frame['min_lat'], frame['max_lon'], frame['min_lon'])
-    communes_gdf = osmnx.features.features_from_bbox(bbox=gpx_bbox, tags={'admin_level': '8'})
-
-    cache.into_cache(hash,communes_gdf)
-    return communes_gdf
+    # Retourne False si osmid n'est ni un entier ni une liste
+    else:
+        return False
 
 
 def osm_test():
