@@ -74,7 +74,7 @@ class TownManager:
 
     def town_md(self,nom_ville):
         
-        if isinstance(self.towns[nom_ville]['web'], str):
+        if isinstance(self.towns[nom_ville]['web'], str) and self.towns[nom_ville]['web'] != "":
             return f"[{nom_ville}]({self.towns[nom_ville]['web']})"
         else:
             return nom_ville
@@ -95,7 +95,8 @@ class TownManager:
         pbar = tqdm(total=total_points, desc='Towns in GPX:')
 
         now_town = None
-        now_town_name = None
+        distance_enter_town = 0
+        last_point = 0
 
         for track in gpx.tracks:
             for segment in track.segments:
@@ -110,18 +111,19 @@ class TownManager:
 
                     last_point = i
                     town_data = self.locate_point_in_town(point.latitude, point.longitude)
-                    if town_data['name'] != now_town_name:
+                    #print(i, town_data['name'])
+                    if now_town is None or town_data['name'] != now_town['name']:
                         if now_town:
                             #On quitte la now_town
                             distance = meters[i]-distance_enter_town
                             distance_enter = distance_enter_town
-                            self.update_town(town_data, distance_enter, distance)
+                            self.update_town(now_town, distance_enter, distance)
                             #print(town_name)
                             
                         #On entre a new town
+                        #print(town_data['name'])
                         distance_enter_town = meters[i]
                         now_town = town_data
-                        now_town_name = town_data['name']
 
         distance = meters[i-1]-distance_enter_town
         self.update_town(town_data, distance_enter_town, distance)

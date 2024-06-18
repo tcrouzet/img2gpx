@@ -141,13 +141,13 @@ frame = o.gpx_frame(gpx)
 villes_info = o.TownManager()
 villes_info.cities(frame)
 t.pd("Acquisition towns ended")
-t.save_gdf(villes_info.communes_gdf, os.path.join(output_folder,"towns.txt"))
+#t.save_gdf(villes_info.communes_gdf, os.path.join(output_folder,"towns.txt"))
 
 villes_info.gpx_villes(gpx, meters)
 t.pd("GPX ville ended")
 
 road_book =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.md"))
-road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.png"))
+#road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.png"))
 
 with open(road_book, 'w', encoding='utf-8') as fichier_md:
 
@@ -211,8 +211,9 @@ t.pd("Upgrade ways ended")
 road_html =  os.path.join(output_folder, gpx_file.replace(".gpx",".html"))
 o.plot_communes_folium(road_html, traversed, ways_info, gpx_name)
 
-road_html =  os.path.join(output_folder, gpx_file.replace(".gpx","_link.html"))
-o.folium_ways2(road_html, traversed, ways_info, gpx_name)
+# Map avec link OSM
+# road_html =  os.path.join(output_folder, gpx_file.replace(".gpx","_link.html"))
+# o.folium_ways2(road_html, traversed, ways_info, gpx_name)
 
 road_book = os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.md"))
 
