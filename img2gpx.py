@@ -9,12 +9,15 @@ from parameters import images_folder, cover_img, font_file, audio_file, distance
 import tools as t
 import osm_tools as o
 import cache_manager as cache
+import hashlib
 import yaml
 import locale
 locale.setlocale(locale.LC_TIME, 'fr_FR')
 
 os.system('clear')
 cache.init_cache(gpx_file)
+
+img_exclude=['IMG_6967.jpeg','v.png']
 
 def get_exif_data(image_path):
 
@@ -111,17 +114,32 @@ def create_gpx_trace_image_segment(gpx, image_size, color, frame, output_path):
     img.save(output_path)
 
 
+def calculate_md5(file_path):
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
-def process_img(folder, gpx, meters, towns):
+def process_img(folder, gpx, meters, villes_info):
     global distance_filter, gdf
 
     images = []
+    former_hash = None
 
     # Parcours du dossier source pour copier les images
     for root, _, files in os.walk(folder):
         for filename in files:
             if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
                 source_path = os.path.join(root, filename)
+                hash = calculate_md5(source_path)
+                if hash == former_hash:
+                    continue
+                else:
+                    former_hash = hash
+
+                if filename in img_exclude:
+                    continue
 
                 exif_data = get_exif_data(source_path)
                 geotags = get_geotagging(exif_data)
@@ -136,7 +154,7 @@ def process_img(folder, gpx, meters, towns):
                     datetime = exif_data['DateTime']
                     width = exif_data['ExifImageWidth']
                     height = exif_data['ExifImageHeight']
-                    (town, postal_code, population, website) = o.locate_point_in_town(lat,lon,towns)
+                    town = villes_info.locate_point_in_town(lat,lon)
 
                 else:
                     continue
@@ -150,7 +168,7 @@ def process_img(folder, gpx, meters, towns):
                     "datetime": datetime,
                     "width": width,
                     "height": height,
-                    "town": town
+                    "town": town['name']
                 }
 
                 images.append(dic)
@@ -178,11 +196,15 @@ def create_yml(images):
 gpx = t.gpx_reader(gpx_path)
 meters = t.gpx_meters(gpx)
 frame = o.gpx_frame(gpx)
-towns = o.cities(frame)
-images = process_img(images_folder, gpx, meters, towns)
+
+villes_info = o.TownManager()
+villes_info.cities(frame)
+
+images = process_img(images_folder, gpx, meters, villes_info)
 images = sorted(images, key=lambda dico: dico["meters"])
 
 create_yml(images)
+exit()
 
 #Création de l'image de la trace
 #taille_cible = (1920, 1440)
