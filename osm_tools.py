@@ -112,7 +112,7 @@ class TownManager:
                     last_point = i
                     town_data = self.locate_point_in_town(point.latitude, point.longitude)
                     #print(i, town_data['name'])
-                    if now_town is None or town_data['name'] != now_town['name']:
+                    if now_town is None or (town_data is not None and town_data['name'] != now_town['name']):
                         if now_town:
                             #On quitte la now_town
                             distance = meters[i]-distance_enter_town
@@ -687,8 +687,6 @@ class Ways:
             raise ValueError("No polygons to display in the graph.")
 
 
-
-
 def is_in(search, variable):
     if isinstance(variable, str) and variable == search:
         return True
@@ -696,7 +694,6 @@ def is_in(search, variable):
         return True
     else:
         return False
-
 
 
 def terrain_color(terrain):

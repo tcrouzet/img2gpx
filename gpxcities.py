@@ -75,7 +75,7 @@ def format_ways(ways_info,index=None):
             #way.print_info()
             t.plot_graph(voies, way.segment)
 
-        if town is None or town != way.town['name']:
+        if town is None or (way.town is not None and town != way.town['name']):
 
             if isinstance(way.town['web'], str):
                 md += f"\n[{way.town['name']}]({way.town['web']})\n"
