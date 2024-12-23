@@ -581,7 +581,6 @@ class Ways:
         return
 
 
-
     def plot_graph(self, graph, coordinates=None):
         if graph is None:
             raise ValueError("The graph attribute is not initialized.")
@@ -643,7 +642,7 @@ class Ways:
         return polygons
 
 
-    def plot_graph_folium(self, graph, coordinates=None):
+    def plot_graph_foliumOld(self, graph, coordinates=None):
         if graph is None:
             raise ValueError("The graph attribute is not initialized.")
         
@@ -651,6 +650,7 @@ class Ways:
         polygons = []
         for u, v, data in graph.edges(data=True):
             if 'geometry' in data:
+                # Collect geometry with osmid
                 polygons.append(data['geometry'])
             else:
                 point_u = Point((graph.nodes[u]['x'], graph.nodes[u]['y']))
@@ -685,6 +685,7 @@ class Ways:
             webbrowser.open("file://" + map_file, new=2)
         else:
             raise ValueError("No polygons to display in the graph.")
+
 
 
 def is_in(search, variable):
@@ -767,6 +768,14 @@ def plot_communes_brut(communes_gdf):
     # Affichage de la carte
     plt.show()
 
+
+def osm_url(osm_id, osm_type='way'):
+    base_url = "https://www.openstreetmap.org/"
+    if osm_type not in ['node', 'way', 'relation']:
+        raise ValueError("Type d'objet OSM invalide. Utiliser 'node', 'way' ou 'relation'.")
+    
+    return f"{base_url}{osm_type}/{osm_id}"
+    
 
 def plot_communes(path, communes_gdf, villes_info, gpx=None, title="Trace"):
 
@@ -958,7 +967,117 @@ def folium_ways2(path, communes_gdf, ways, title="Trace"):
 
 
 
-def plot_communes_folium(path, communes_gdf, gpx=None, title="Trace"):
+def plot_communes_folium(path, communes_gdf, gpx=None, title="Trace", script_flag=False):
+    mode = 'default'
+    if gpx:
+        if hasattr(gpx, 'tracks'):
+            mode = 'gpx'
+        else:
+            mode = 'info'
+
+    m = folium.Map(tiles='CartoDB positron')  # Fond casi blanc
+
+    bounds = communes_gdf.total_bounds
+    m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+
+    # Ajouter les polygones des communes à la carte
+    for index, commune in communes_gdf.iterrows():
+        folium.GeoJson(
+            data=commune['geometry'],
+            style_function=lambda x: {'fillColor': 'gray', 'color': 'black', 'weight': 0.5},
+        ).add_to(m)
+
+    # Ajouter des traces GPX si disponibles
+    if mode == "gpx":
+        for track in gpx.tracks:
+            for segment in track.segments:
+                points = [(point.latitude, point.longitude) for point in segment.points]
+                folium.PolyLine(points, color='red', weight=3, opacity=0.5).add_to(m)
+
+    elif mode == "info":
+        filter = 0.001
+
+        # Pour chaque élément `way` dans gpx, créer un MultiLineString et le simplifier.
+        for way in gpx:
+            multiline = MultiLineString([way.segment])
+            merged_line = linemerge(multiline)
+
+            # Vérifier le type de `merged_line` et simplifier les coordonnées.
+            if isinstance(merged_line, LineString):
+                coords = [list(merged_line.simplify(filter, preserve_topology=True).coords)]
+            elif isinstance(merged_line, MultiLineString):
+                coords = [list(line.simplify(filter, preserve_topology=True).coords) for line in merged_line.geoms]
+            else:
+                coords = []
+
+            color = terrain_color(way.terrain)  # Obtenir la couleur basée sur le terrain.
+            for coord in coords:
+                # Vérifier si `osmid` est présent et créer un lien OSM si disponible.
+                if way.osmid:
+
+                    # Vérifier si `osmid` est une liste et créer un lien pour chaque OSMID
+                    if isinstance(way.osmid, list):
+                        osm_links = ' '.join([f'<a href="{osm_url(osmid, "way")}" target="_blank">{osmid}</a>' for osmid in way.osmid])
+                        popup_html = f'OSMIDs: {osm_links}'
+                    else:
+                        osm_link = osm_url(way.osmid, 'way')
+                        popup_html = f'<a href="{osm_link}" target="_blank">OSMID: {way.osmid}</a>'
+            
+                    folium.PolyLine(
+                        locations=coord,
+                        color=color,
+                        weight=4,
+                        opacity=1,
+                        bubblingMouseEvents=False,
+                        popup=folium.Popup(popup_html, max_width=300)
+                    ).add_to(m)
+                else:
+                    # Ajouter un PolyLine sans popup si `osmid` n'est pas disponible.
+                    folium.PolyLine(
+                        locations=coord,
+                        color=color,
+                        weight=4,
+                        opacity=1,
+                        bubblingMouseEvents=False
+                    ).add_to(m)
+
+        stats = ways_stats(gpx)
+        mystats_surfaces = stats_surfaces(stats)
+        m.get_root().html.add_child(title_element(title, stats, mystats_surfaces))
+
+    # Ajout du script JavaScript pour activer la carte au clic
+    script = """
+    <script>
+    function disableBodyInteractions() {
+        document.body.style.pointerEvents = 'none'; // Désactive toutes les interactions de pointeur sur le body
+    }
+
+    function enableBodyInteractions() {
+        document.body.style.pointerEvents = 'auto'; // Réactive les interactions de pointeur
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        disableBodyInteractions();
+
+        window.addEventListener('focus', function() {
+            enableInteractions();
+        });
+        window.addEventListener('blur', function() {
+            disableInteractions();
+        });
+    });
+    </script>
+    """
+
+    if script_flag:
+        m.get_root().html.add_child(Element(script))
+
+    m.save(path)
+    webbrowser.open("file://" + path, new=2)
+
+
+
+def plot_communes_foliumOld(path, communes_gdf, gpx=None, title="Trace"):
 
     mode = 'default'
     if gpx:
@@ -1048,7 +1167,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     m.save(path)
     webbrowser.open( "file://" + path, new=2)
-
 
 #Plus lens et moins précis que locate_way
 def locate_way_path(gpx_segment, G_projected):
@@ -1170,8 +1288,6 @@ def gpx_polygon(gpx):
 
     else:
         exit("Pas assez de points pour former un polygone.")
-
-
 
 
 def show_polygons(polygons):
