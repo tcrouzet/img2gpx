@@ -77,10 +77,11 @@ def format_ways(ways_info,index=None):
 
         if town is None or (way.town is not None and town != way.town['name']):
 
+            km = o.meter_2_km(dist)
             if isinstance(way.town['web'], str):
-                md += f"\n[{way.town['name']}]({way.town['web']})\n"
+                md += f"\n{km} - [{way.town['name']}]({way.town['web']})\n"
             else:
-                md += f"\n{way.town['name']}\n"
+                md += f"\n{km} - {way.town['name']}\n"
 
             town = way.town['name']
 

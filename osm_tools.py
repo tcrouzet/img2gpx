@@ -65,9 +65,7 @@ class TownManager:
             lisible = distance_lisible(infos['distance'])
 
             # {infos['population']} {infos['web']} 
-            msg += f"{index+1}. {self.town_md(nom_ville)} km{enter} {lisible}"
-            #msg += f" {infos['code_postal']}"
-            #msg += f" {infos['code_ville']}"
+            msg += f"km{enter} - {self.town_md(nom_ville)} {lisible}"
             msg += "\n\n"
         return msg
 
@@ -143,7 +141,12 @@ class TownManager:
         # Vérifier dans quelle commune se trouve le point
         for _, row in self.communes_gdf.iterrows():
             if location.within(row['geometry']):
-                postal_code = row['postal_code'].split(";")[0].strip() #Premier code quand plusieurs
+                # postal_code = row['postal_code'].split(";")[0].strip() #Premier code quand plusieurs
+                postal_code = row['postal_code']
+                if postal_code is not None and not isinstance(postal_code, float):
+                    postal_code = str(postal_code).split(";")[0].strip()
+                else:
+                    postal_code = ""
                 if 'ref:INSEE' in row:
                     town_code = row['ref:INSEE'].strip()
                 else:
@@ -1075,98 +1078,6 @@ def plot_communes_folium(path, communes_gdf, gpx=None, title="Trace", script_fla
     m.save(path)
     webbrowser.open("file://" + path, new=2)
 
-
-
-def plot_communes_foliumOld(path, communes_gdf, gpx=None, title="Trace"):
-
-    mode = 'default'
-    if gpx:
-        if hasattr(gpx, 'tracks'):
-            mode = 'gpx'
-        else:
-            mode = 'info'
-
-    # https://deparkes.co.uk/2016/06/10/folium-map-tiles/
-    # https://pypi.org/project/folium/0.1.4/
-    m = folium.Map(tiles='CartoDB positron') #Fond casi blanc
-    #m = folium.Map(tiles='CartoDB dark_matter') #Fond casi noir
-    #m = folium.Map(tiles='OpenStreetMap') #Classique
-    #m = folium.Map(tiles='CartoDB Voyager')
-
-    bounds = communes_gdf.total_bounds
-    m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
-
-    # Ajouter les polygones des communes à la carte
-    for index, commune in communes_gdf.iterrows():
-        folium.GeoJson(
-            data=commune['geometry'],
-            style_function=lambda x: {'fillColor': 'gray', 'color': 'black', 'weight': 0.5},
-        ).add_to(m)
-
-    # Ajouter des traces GPX si disponibles
-    if mode == "gpx":
-        for track in gpx.tracks:
-            for segment in track.segments:
-                points = [(point.latitude, point.longitude) for point in segment.points]
-                folium.PolyLine(points, color='red', weight=3, opacity=0.5).add_to(m)
-
-    elif mode == "info":
-
-        filter = 0.001
- 
-        # Grouper les segments par terrain
-        for terrain, group in groupby(sorted(gpx, key=lambda x: x.terrain), key=lambda x: x.terrain):
-            multiline = MultiLineString([way.segment for way in group])
-            merged_line = linemerge(multiline)
-
-            if isinstance(merged_line, LineString):
-                coords = [list(merged_line.simplify(filter, preserve_topology=True).coords)]
-            elif isinstance(merged_line, MultiLineString):
-                coords = [list(line.simplify(filter, preserve_topology=True).coords) for line in merged_line.geoms]
-
-            else:
-                coords = []
-
-            color = terrain_color(terrain)
-            for coord in coords:
-                folium.PolyLine(locations=coord,
-                                color=color,
-                                weight=4,
-                                opacity=1,
-                                bubblingMouseEvents=False).add_to(m)
-
-        stats = ways_stats(gpx)
-        mystats_surfaces = stats_surfaces(stats)
-        m.get_root().html.add_child(title_element(title, stats, mystats_surfaces))
-
-
-    # Ajout du script JavaScript pour activer la carte au clic
-    script = """
-    <script>
-function disableBodyInteractions() {
-    document.body.style.pointerEvents = 'none'; // Désactive toutes les interactions de pointeur sur le body
-}
-
-function enableBodyInteractions() {
-    document.body.style.pointerEvents = 'auto'; // Réactive les interactions de pointeur
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    disableBodyInteractions();
-
-    window.addEventListener('focus', function() {
-        enableInteractions();
-    });
-    window.addEventListener('blur', function() {
-        disableInteractions();
-    });
-});
-    </script>
-    """
-    m.get_root().html.add_child(Element(script))
-
-    m.save(path)
-    webbrowser.open( "file://" + path, new=2)
 
 #Plus lens et moins précis que locate_way
 def locate_way_path(gpx_segment, G_projected):

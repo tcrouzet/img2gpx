@@ -8,7 +8,7 @@ import datetime, sys
 import time
 from parameters import cache_folder
 
-osmnx.config(cache_folder=cache_folder)
+osmnx.settings.cache_folder = cache_folder
 #matplotlib.use('Agg')
 
 class DualOutput:

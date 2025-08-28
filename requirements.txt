@@ -2,8 +2,7 @@ gpxpy
 moviepy
 geopandas
 matplotlib
-osmnx
-requests
+Pour requests
 scipy
 tqdm
 folium

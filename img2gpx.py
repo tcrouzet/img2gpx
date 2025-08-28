@@ -1,7 +1,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ExifTags import TAGS, GPSTAGS
-import gpxpy.gpx
+# import gpxpy.gpx
 from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip, AudioFileClip
 import numpy as np
 from datetime import datetime
