@@ -147,8 +147,8 @@ class TownManager:
                     postal_code = str(postal_code).split(";")[0].strip()
                 else:
                     postal_code = ""
-                if 'ref:INSEE' in row:
-                    town_code = row['ref:INSEE'].strip()
+                if 'ref:INSEE' in row and not isinstance(row['ref:INSEE'], float):
+                    town_code = str(row['ref:INSEE']).strip()
                 else:
                     town_code = postal_code
 
@@ -1140,8 +1140,14 @@ def overpass(query):
     
     # Endpoint de l'API Overpass
     url = "http://overpass-api.de/api/interpreter"
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'text/plain',
+        'User-Agent': 'BikepackingPOI/1.0 (tc@tcrouzet.com)',
+        'Referer': 'https://727bikepacking.fr/'
+    }
 
-    response = requests.post(url, data={'data': query})
+    response = requests.post(url, data={'data': query}, headers=headers)
     data = response.json()
     
     cache.into_cache(hash, data['elements'])
