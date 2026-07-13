@@ -1,11 +1,11 @@
 from parameters import assets_dir, output_folder, logs_file, gpx_file, gpx_path
 import tools as t
+from network_check import NetworkDiagnostic
 import osm_tools as o
 import os, sys
 from tqdm import tqdm
 import cache_manager as cache
 import warnings
-import osmnx
 
 os.system('clear')
 
@@ -131,7 +131,13 @@ def export_book(path,ways_info,title):
         fichier_md.write(format_ways(ways_info))
 
 
+diag = NetworkDiagnostic(suspect_host="z.overpass-api.de")
+result = diag.run()
+
 t.pd("Acquisition towns started")
+
+o.find_working_overpass_endpoint()
+
 gpx = t.gpx_reader(gpx_path)
 gpx_name = t.gpx_name(gpx)
 t.pd(gpx_name)

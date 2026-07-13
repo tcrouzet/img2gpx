@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import geopandas as gpd
 import osmnx
+import time
 import networkx as nx
 import requests, math, os
 import numpy as np
@@ -12,9 +13,116 @@ import cache_manager as cache
 from parameters import output_folder
 import webbrowser, folium
 from branca.element import MacroElement, Element, Figure
-from itertools import groupby
+import tools as t
 
-from jinja2 import Template
+
+# from itertools import groupby
+# from jinja2 import Template
+
+# OSMnx base endpoint should be the API root (no /interpreter suffix)
+# This list is used to try a working Overpass endpoint before issuing OSM queries.
+OVERPASS_ENDPOINTS = [
+    # 'https://overpass.kumi.systems/api',
+    # 'https://overpass.openstreetmap.fr',
+    'https://lz4.overpass-api.de/api',
+    'https://overpass.openstreetmap.fr/api',
+    'https://maps.mail.ru/osm/tools/overpass/api',
+    'https://overpass.osm.vk.com/api',
+    'https://overpass.nchc.org.tw/api',
+    'https://overpass.private.coffee/api',
+    'https://z.overpass-api.de/api',
+    'https://overpass-api.de/api',
+]
+OVERPASS_ENDPOINT = None
+OVERPASS_TESTED = False
+OVERPASS_OK = False
+OVERPASS_TIMEOUT = 600
+
+osmnx.settings.use_cache = True
+osmnx.settings.log_console = False
+osmnx.settings.overpass_rate_limit = False
+osmnx.settings.timeout = 600
+
+import osmnx._overpass as _osm_overpass
+
+def _patched_overpass_request(data, **kwargs):
+    query = data["data"]
+    max_attempts = 5
+    wait_time = 5  # secondes, augmente à chaque échec
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return _overpass_request(OVERPASS_ENDPOINT, query, OVERPASS_TIMEOUT)
+        except requests.exceptions.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 429:
+                retry_after = exc.response.headers.get('Retry-After')
+                pause = int(retry_after) if retry_after else wait_time
+                print(f'  429 Too Many Requests, pause de {pause}s (tentative {attempt}/{max_attempts})')
+                time.sleep(pause)
+                wait_time *= 2  # backoff exponentiel
+                continue
+            raise  # autre erreur HTTP : on ne la masque pas
+
+    raise RuntimeError('Trop de 429 consécutifs, abandon.')
+
+_osm_overpass._overpass_request = _patched_overpass_request
+
+
+# https://clear-turbo.eu/
+def overpass(query):
+    data = _overpass_request(OVERPASS_ENDPOINT, query, OVERPASS_TIMEOUT)
+    return data.get('elements', [])
+
+def _overpass_request(endpoint, query, timeout=30):
+
+    hash = cache.create_hash(query,'_overpass')
+    found, cached_result = cache.get_cache(hash)
+    if found:
+        return cached_result
+
+    if not OVERPASS_ENDPOINT:
+        raise RuntimeError('No working Overpass endpoint available.')
+
+    url = f"{endpoint}/interpreter"
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'text/plain',
+        'User-Agent': 'BikepackingPOI/1.0 (tc@tcrouzet.com)',
+        'Referer': 'https://727bikepacking.fr/'
+    }
+    response = requests.post(url, data={'data': query}, headers=headers, timeout=timeout)
+    response.raise_for_status()
+    response_json = response.json()
+    cache.into_cache(hash, response_json)
+    return response_json
+
+
+def find_working_overpass_endpoint():
+    global OVERPASS_ENDPOINT
+    t.pd('Testing Overpass endpoints:')
+    query = '[out:json];node(48.84,2.33,48.8401,2.3301);out body 1;'
+    for endpoint in OVERPASS_ENDPOINTS:
+        t.pd(f'  - trying {endpoint}')
+
+        try:
+            json_data = _overpass_request(endpoint, query, timeout=10)
+
+            if isinstance(json_data, dict) and 'elements' in json_data:
+                OVERPASS_ENDPOINT = endpoint
+                osmnx.settings.overpass_url = OVERPASS_ENDPOINT
+                t.pd(f' selected endpoint: {endpoint}')
+                return True
+
+            print(' invalid JSON response or no elements')
+
+        except Exception as exc:
+            msg = str(exc).replace('\n', ' ')
+            busy_note = ' busy' if 'busy' in msg.lower() or 'temporarily unavailable' in msg.lower() else ''
+            t.pd(f' failure{busy_note}: {msg}')
+            continue
+
+    t.pd('No working Overpass endpoint found.')
+    exit()
 
 
 class TownManager:
@@ -432,7 +540,7 @@ class Ways:
         self.previous_edge = self.init_edge()
         self.nodes_gdf = None
 
-        self.max_distance_km=20
+        self.max_distance_km = 5
 
 
     def init_edge(self):
@@ -504,7 +612,8 @@ class Ways:
 
         combined_graph = nx.MultiDiGraph()
 
-        print("Polygons in frame:",len(self.polygon_frames))
+        n_polygons = len(self.polygon_frames)
+        t.pd(f"Polygons in frame: {n_polygons}")
         pbar = tqdm(total=len(self.polygon_frames), desc='Ways:')
         for polygon in self.polygon_frames:
             pbar.update(1)
@@ -530,6 +639,9 @@ class Ways:
                 return cached_result
         
         #Récupère OSM ways
+        # t.pd(f"\nNew Polygon Ways {hash}")
+        # t.pd(f"DEBUG overpass_url juste avant l'appel: {osmnx.settings.overpass_url}")
+        # t.pd(polygon)
         G = osmnx.graph_from_polygon(polygon, network_type='all')
 
         cache.into_cache(hash, G)
@@ -562,7 +674,12 @@ class Ways:
                         if distance > self.max_distance_km*1000:
                             # Distance maximale atteinte, créer un polygone avec le segment actuel
                             if len(current_segment) > 2:
+                                
                                 poly = Polygon(LineString(current_segment).buffer(0.01))  # 0.01 degré de buffer
+                                poly = poly.simplify(0.001, preserve_topology=True)
+                                if not poly.is_valid:
+                                    poly = poly.buffer(0)
+
                                 if poly.is_valid:
                                     self.polygon_frames.append(poly)
                                 else:
@@ -579,6 +696,10 @@ class Ways:
         # Traiter le dernier segment
         if len(current_segment) > 2:
             poly = Polygon(LineString(current_segment).buffer(0.01))
+            poly = poly.simplify(0.001, preserve_topology=True)
+            if not poly.is_valid:
+                poly = poly.buffer(0)
+
             self.polygon_frames.append(poly)
 
         return
@@ -1130,28 +1251,6 @@ def locate_way_path(gpx_segment, G_projected):
     return nearest_edge
 
 
-# https://overpass-turbo.eu/
-def overpass(query):
-
-    hash = cache.create_hash(query,'overpass')
-    found, cached_result = cache.get_cache(hash)
-    if found:
-        return cached_result
-    
-    # Endpoint de l'API Overpass
-    url = "http://overpass-api.de/api/interpreter"
-    headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'text/plain',
-        'User-Agent': 'BikepackingPOI/1.0 (tc@tcrouzet.com)',
-        'Referer': 'https://727bikepacking.fr/'
-    }
-
-    response = requests.post(url, data={'data': query}, headers=headers)
-    data = response.json()
-    
-    cache.into_cache(hash, data['elements'])
-    return data['elements']
 
 
 def calculate_orientation(line):
