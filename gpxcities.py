@@ -78,11 +78,16 @@ def format_ways(ways_info,index=None):
         if town is None or (way.town is not None and town != way.town['name']):
 
             km = o.meter_2_km(dist)
-            if isinstance(way.town['web'], str):
-                md += f"\n{km} - [{way.town['name']}]({way.town['web']})\n"
+            # Le code INSEE (identifiant unique et sans ambiguïté de la
+            # commune) est ajouté devant le nom, pour permettre à
+            # citieslink.py de retrouver les liens sans risque d'homonyme.
+            # Il est retiré du road book final publiable.
+            insee = way.town.get('town_code') or ""
+            if isinstance(way.town['web'], str) and way.town['web'] != "":
+                md += f"\n{km} - {insee} [{way.town['name']}]({way.town['web']})\n"
             else:
-                md += f"\n{km} - {way.town['name']}\n"
-
+                md += f"\n{km} - {insee} {way.town['name']}\n"
+                
             town = way.town['name']
 
         dist += way.distance

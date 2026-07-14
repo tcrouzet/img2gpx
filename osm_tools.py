@@ -70,17 +70,18 @@ _osm_overpass._overpass_request = _patched_overpass_request
 
 # https://clear-turbo.eu/
 def overpass(query):
-    data = _overpass_request(OVERPASS_ENDPOINT, query, OVERPASS_TIMEOUT)
+    data = _overpass_request(OVERPASS_ENDPOINT, query, timeout=OVERPASS_TIMEOUT)
     return data.get('elements', [])
 
-def _overpass_request(endpoint, query, timeout=30):
+def _overpass_request(endpoint, query, timeout=30, cache_flag=True):
 
-    hash = cache.create_hash(query,'_overpass')
-    found, cached_result = cache.get_cache(hash)
-    if found:
-        return cached_result
+    if cache_flag:
+        hash = cache.create_hash(query,'_overpass')
+        found, cached_result = cache.get_cache(hash)
+        if found:
+            return cached_result
 
-    if not OVERPASS_ENDPOINT:
+    if not endpoint:
         raise RuntimeError('No working Overpass endpoint available.')
 
     url = f"{endpoint}/interpreter"
@@ -93,7 +94,8 @@ def _overpass_request(endpoint, query, timeout=30):
     response = requests.post(url, data={'data': query}, headers=headers, timeout=timeout)
     response.raise_for_status()
     response_json = response.json()
-    cache.into_cache(hash, response_json)
+    if cache_flag:
+        cache.into_cache(hash, response_json)
     return response_json
 
 
@@ -105,7 +107,7 @@ def find_working_overpass_endpoint():
         t.pd(f'  - trying {endpoint}')
 
         try:
-            json_data = _overpass_request(endpoint, query, timeout=10)
+            json_data = _overpass_request(endpoint, query, timeout=10, cache_flag=False)
 
             if isinstance(json_data, dict) and 'elements' in json_data:
                 OVERPASS_ENDPOINT = endpoint
@@ -171,9 +173,15 @@ class TownManager:
         for index, (nom_ville, infos) in enumerate(self.towns.items()):
             enter = meter_2_km(infos['distance_enter'])
             lisible = distance_lisible(infos['distance'])
+            insee = infos.get('code_ville') or ""
 
-            # {infos['population']} {infos['web']} 
-            msg += f"km{enter} - {self.town_md(nom_ville)} {lisible}"
+            # Le code INSEE est ajouté devant le nom : identifiant unique et
+            # sans ambiguïté pour chaque commune (contrairement au nom seul,
+            # qui peut être homonyme d'une autre commune française). Utilisé
+            # ensuite par citieslink.py pour retrouver les liens sans risque
+            # d'erreur, puis retiré du road book final publiable.
+            # {infos['population']} {infos['web']}
+            msg += f"km{enter} - {insee} {self.town_md(nom_ville)} {lisible}"
             msg += "\n\n"
         return msg
 
