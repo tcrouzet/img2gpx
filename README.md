@@ -8,8 +8,8 @@ img2gpx est un outil Python destiné à transformer une trace GPX et des photos 
 Le projet contient trois modules principaux :
 
 - img2gpx.py : géolocalise des photos sur une trace GPX et génère une vidéo.
-- gpxcities.py : construit un roadbook, une carte et des statistiques à partir d’un GPX et d’OpenStreetMap.
-- citieslink.py : enrichit le roadbook avec des liens vers les sites officiels ou Wikipédia des communes traversées.
+- gpxcities.py : construit la carte et les statistiques à partir d’un GPX et d’OpenStreetMap.
+- books.py : génère les roadbooks et les enrichit avec les sites officiels ou Wikipédia des communes.
 
 [![i727 diaporama](assets/screenshot.jpg)](https://youtu.be/KQYF0Ujdgek)
 
@@ -93,7 +93,7 @@ Ce script va :
 - retrouver la position des photos sur la trace GPX,
 - créer un fichier vidéo dans _output/_video.mp4.
 
-### 2. Générer le roadbook et la carte
+### 2. Générer la carte
 
 ```bash
 python gpxcities.py
@@ -103,21 +103,45 @@ Ce script va :
 
 - analyser la trace GPX,
 - récupérer les communes traversées via OpenStreetMap,
-- générer un roadbook Markdown et une page HTML dans _output/.
+- générer la carte HTML dans _output/.
 
-Les fichiers générés comprennent notamment :
+Le fichier généré est notamment :
+
+- <nom_du_gpx>.html
+
+### 3. Générer les roadbooks enrichis
+
+```bash
+python books.py
+```
+
+Ce script génère directement les deux roadbooks Markdown et ajoute les liens
+vers les sites officiels ou Wikipédia des communes. Sous chaque commune, il
+ajoute aussi sa population et, lorsqu'ils sont disponibles dans OpenStreetMap,
+son type, son statut ou ses labels (`place`, `capital`, `designation`) :
 
 - <nom_du_gpx>_road_book.md
 - <nom_du_gpx>_road_book_plus.md
-- <nom_du_gpx>.html
+- <nom_du_gpx>_towns.csv (communes traversées, construit depuis OSM et utilisable hors de France)
 
-### 3. Enrichir le roadbook avec des liens vers les communes
+### 4. Générer les versions HTML
 
-```bash
-python citieslink.py
+Après avoir éventuellement ajouté un commentaire sous les voies d’une ville :
+
+```markdown
+> Mon commentaire affiché au pied de cette ville.
 ```
 
-Ce script complète le roadbook avec des liens vers les sites officiels ou Wikipédia des communes, lorsqu’ils sont disponibles.
+lancer :
+
+```bash
+python html.py
+```
+
+Ce script produit :
+
+- <nom_du_gpx>_road_book.html
+- <nom_du_gpx>_road_book_plus.html
 
 ## Conseils d’utilisation
 
@@ -129,8 +153,9 @@ Ce script complète le roadbook avec des liens vers les sites officiels ou Wikip
 ## Structure du dépôt
 
 - img2gpx.py : génération de la vidéo.
-- gpxcities.py : génération du roadbook et de la cartographie.
-- citieslink.py : enrichissement des liens de communes.
+- gpxcities.py : génération de la cartographie.
+- books.py : génération et enrichissement des roadbooks.
+- html.py : conversion des roadbooks Markdown en pages HTML.
 - parameters.py : configuration centrale.
 - tools.py, osm_tools.py, cache_manager.py, network_check.py : utilitaires et accès réseau.
 - assets/ : fichiers de support visuel et audio.

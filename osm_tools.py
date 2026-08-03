@@ -82,7 +82,12 @@ def _overpass_request(endpoint, query, timeout=30, cache_flag=True):
             return cached_result
 
     if not endpoint:
-        raise RuntimeError('No working Overpass endpoint available.')
+        # Ne teste le réseau qu'après un échec de cache. Ainsi un traitement
+        # entièrement couvert par l'ancien cache ne contacte pas Overpass.
+        find_working_overpass_endpoint()
+        endpoint = OVERPASS_ENDPOINT
+        if not endpoint:
+            raise RuntimeError('No working Overpass endpoint available.')
 
     url = f"{endpoint}/interpreter"
     headers = {
@@ -151,6 +156,11 @@ class TownManager:
                     'code_ville': data['town_code'],
                     'population': data['population'],
                     'web': data['web'],
+                    'place': data.get('place', ''),
+                    'capital': data.get('capital', ''),
+                    'designation': data.get('designation', ''),
+                    'wikipedia': data.get('wikipedia', ''),
+                    'wikidata': data.get('wikidata', ''),
                     }
         else:
             print("Problem update town", data['name'], distance_enter, distance)
@@ -178,7 +188,7 @@ class TownManager:
             # Le code INSEE est ajouté devant le nom : identifiant unique et
             # sans ambiguïté pour chaque commune (contrairement au nom seul,
             # qui peut être homonyme d'une autre commune française). Utilisé
-            # ensuite par citieslink.py pour retrouver les liens sans risque
+            # ensuite par books.py pour retrouver les liens sans risque
             # d'erreur, puis retiré du road book final publiable.
             # {infos['population']} {infos['web']}
             msg += f"km{enter} - {insee} {self.town_md(nom_ville)} {lisible}"
@@ -247,7 +257,7 @@ class TownManager:
 
     def locate_point_in_town(self, lat, lon):
 
-        hash = cache.create_hash((lat,lon),'locate_point')
+        hash = cache.create_hash((lat,lon),'locate_point_v2')
         found, cached_result = cache.get_cache(hash)
         if found and self.cache_flag:
             return cached_result
@@ -266,7 +276,9 @@ class TownManager:
                 if 'ref:INSEE' in row and not isinstance(row['ref:INSEE'], float):
                     town_code = str(row['ref:INSEE']).strip()
                 else:
-                    town_code = postal_code
+                    # Ne jamais utiliser un code postal étranger comme code
+                    # INSEE : les deux peuvent avoir cinq chiffres.
+                    town_code = ""
 
                 web = row['website'].strip() if 'website' in row and isinstance(row['website'], str) and row['website'].lower() != 'nan' else ""
                 
@@ -275,7 +287,12 @@ class TownManager:
                     'postal_code': postal_code,
                     'town_code': town_code,
                     'population': row['population'],
-                    'web': web
+                    'web': web,
+                    'place': row.get('place', '') if isinstance(row.get('place', ''), str) else '',
+                    'capital': str(row.get('capital', '')).strip() if isinstance(row.get('capital', ''), (str, int)) else '',
+                    'designation': row.get('designation', '') if isinstance(row.get('designation', ''), str) else '',
+                    'wikipedia': row.get('wikipedia', '') if isinstance(row.get('wikipedia', ''), str) else '',
+                    'wikidata': row.get('wikidata', '') if isinstance(row.get('wikidata', ''), str) else '',
                     }
 
                 cache.into_cache(hash, response)

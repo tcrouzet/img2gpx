@@ -29,83 +29,6 @@ def custom_showwarning(message, category, filename, lineno, file=None, line=None
 warnings.showwarning = custom_showwarning
 
 
-def compress_ways(ways_info):
-
-    #Successifs
-    new_ways = []
-    for i, way in enumerate(ways_info):
-        if i == 0:
-            new_ways.append(way)
-            continue
-        if way.title == new_ways[-1].title and way.terrain == new_ways[-1].terrain:
-            new_ways[-1].distance += way.distance
-            new_ways[-1].elevationPositif += way.elevationPositif
-            new_ways[-1].elevationNegatif += way.elevationNegatif
-        else:
-            new_ways.append(way)
-
-    return new_ways
-
-def sandwich_ways(new_ways):
-    hyper_ways = []
-    i = 0
-    while i < len(new_ways):
-        way = new_ways[i]
-        if i == 0 or i == len(new_ways)-1:
-            hyper_ways.append(way)
-            i += 1
-        elif o.is_osmid_positive(hyper_ways[-1].way['osmid']) and hyper_ways[-1].title == new_ways[i+1].title and compare_osmid(hyper_ways[-1].way['osmid'], new_ways[i+1].way['osmid']):
-            #Sandwitch
-            hyper_ways[-1].distance += way.distance + new_ways[i+1].distance
-            i += 2
-        else:
-            hyper_ways.append(way)
-            i += 1
-
-    return hyper_ways
-
-
-def format_ways(ways_info,index=None):
-    md = ""
-    #md = f"\n\nSegments: {len(ways_info)}"
-    dist = 0
-    town = None
-    for i, way in enumerate(ways_info):
-        if index and i==index:
-            #way.print_info()
-            t.plot_graph(voies, way.segment)
-
-        if town is None or (way.town is not None and town != way.town['name']):
-
-            km = o.meter_2_km(dist)
-            # Le code INSEE (identifiant unique et sans ambiguïté de la
-            # commune) est ajouté devant le nom, pour permettre à
-            # citieslink.py de retrouver les liens sans risque d'homonyme.
-            # Il est retiré du road book final publiable.
-            insee = way.town.get('town_code') or ""
-            if isinstance(way.town['web'], str) and way.town['web'] != "":
-                md += f"\n{km} - {insee} [{way.town['name']}]({way.town['web']})\n"
-            else:
-                md += f"\n{km} - {insee} {way.town['name']}\n"
-                
-            town = way.town['name']
-
-        dist += way.distance
-        #md += f"{i+1} {way.title} [{way.terrain}] {o.distance_lisible(way.distance)} {way.way['osmid']}\n"
-        md += f"{way.title} [{way.terrain}] {o.distance_lisible(way.distance)} +{round(way.elevationPositif)}/{round(way.elevationNegatif)}\n"
-    md += "\n"+o.distance_lisible(dist)
-    return md
-
-
-def compare_osmid(osmid1, osmid2):
-    # Convertir les osmids en sets pour faciliter la comparaison, en s'assurant qu'ils sont sous forme de listes
-    set1 = set([osmid1]) if isinstance(osmid1, int) else set(osmid1)
-    set2 = set([osmid2]) if isinstance(osmid2, int) else set(osmid2)
-    
-    # Vérifier si les deux sets ont au moins un élément en commun
-    return not set1.isdisjoint(set2)
-
-    
 def upgrade_ways(ways_info):
 
     osmids =[]
@@ -130,18 +53,10 @@ def upgrade_ways(ways_info):
         way.update_title()
 
 
-def export_book(path,ways_info,title):
-    with open(path, 'w', encoding='utf-8') as fichier_md:
-        fichier_md.write(f"# {title}\n\n")
-        fichier_md.write(format_ways(ways_info))
-
-
 diag = NetworkDiagnostic(suspect_host="z.overpass-api.de")
 result = diag.run()
 
 t.pd("Acquisition towns started")
-
-o.find_working_overpass_endpoint()
 
 gpx = t.gpx_reader(gpx_path)
 gpx_name = t.gpx_name(gpx)
@@ -157,15 +72,6 @@ t.pd("Acquisition towns ended")
 
 villes_info.gpx_villes(gpx, meters)
 t.pd("GPX ville ended")
-
-road_book =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.md"))
-#road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book.png"))
-
-with open(road_book, 'w', encoding='utf-8') as fichier_md:
-
-    fichier_md.write(f"# {gpx_name}\n\n")
-    fichier_md.write( str(villes_info.towns_numering()) + f" communes\n\n" )
-    fichier_md.write( villes_info.vformat() )
 
 #print(villes_info.get_postal_codes())
 road_html =  os.path.join(output_folder, gpx_file.replace(".gpx",".html"))
@@ -218,19 +124,9 @@ t.pd("Localisation ways ended")
 upgrade_ways(ways_info)
 t.pd("Upgrade ways ended")
 
-#road_png =  os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.png"))
-#o.plot_communes(road_png, traversed, villes_info, ways_info, gpx_name)
 road_html =  os.path.join(output_folder, gpx_file.replace(".gpx",".html"))
 o.plot_communes_folium(road_html, traversed, ways_info, gpx_name)
 
 # Map avec link OSM
-# road_html =  os.path.join(output_folder, gpx_file.replace(".gpx","_link.html"))
+# road_html = os.path.join(output_folder, gpx_file.replace(".gpx","_link.html"))
 # o.folium_ways2(road_html, traversed, ways_info, gpx_name)
-
-road_book = os.path.join(output_folder, gpx_file.replace(".gpx","_road_book_plus.md"))
-
-#export_book(ways_info)
-ways_info = compress_ways(ways_info)
-export_book(road_book, ways_info, gpx_name)
-
-#ways_info = sandwich_ways(ways_info)
