@@ -69,8 +69,12 @@ _osm_overpass._overpass_request = _patched_overpass_request
 
 
 # https://clear-turbo.eu/
-def overpass(query):
-    data = _overpass_request(OVERPASS_ENDPOINT, query, timeout=OVERPASS_TIMEOUT)
+def overpass(query, timeout=None):
+    data = _overpass_request(
+        OVERPASS_ENDPOINT,
+        query,
+        timeout=OVERPASS_TIMEOUT if timeout is None else timeout,
+    )
     return data.get('elements', [])
 
 def _overpass_request(endpoint, query, timeout=30, cache_flag=True):
@@ -129,7 +133,7 @@ def find_working_overpass_endpoint():
             continue
 
     t.pd('No working Overpass endpoint found.')
-    exit()
+    return False
 
 
 class TownManager:

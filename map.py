@@ -15,6 +15,8 @@ import math
 import os
 import random
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import gpxpy
@@ -24,6 +26,7 @@ import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 import requests
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from matplotlib.font_manager import FontProperties
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from shapely.geometry import LineString, Point, box
@@ -48,7 +51,7 @@ def arguments():
     parser.add_argument("--road-book", default=None)
     parser.add_argument("--html", default=None, help="HTML associé, source des statistiques")
     parser.add_argument("--output", default=None)
-    parser.add_argument("--cities", type=int, default=7, help="Nombre maximal de grandes villes en plus du départ/arrivée")
+    parser.add_argument("--cities", type=int, default=11, help="Nombre maximal de grandes villes en plus du départ/arrivée")
     parser.add_argument("--seed", type=int, default=727)
     parser.add_argument("--no-water", action="store_true", help="N'interroge pas OSM pour l'eau")
     return parser.parse_args()
@@ -98,6 +101,7 @@ def read_road_book(path):
             current = {
                 "name": plain_town_name(town.group("body")),
                 "km": int(town.group("km")),
+                "distance_in_town": float(town.group("distance").removesuffix("km")),
                 "population": 0,
                 "status": "",
             }
@@ -149,17 +153,14 @@ def select_towns(entries, major_count):
         endpoint_names.add(normalize_label(entries[-1]["name"]))
 
     seen = set(endpoint_names)
-    # Garde quelques candidats de réserve : les villes trop proches seront
-    # éliminées une fois leurs coordonnées connues.
-    candidate_count = max(major_count * 4, major_count)
-    for town in sorted(entries, key=lambda item: item["population"], reverse=True):
+    # Conserve tous les candidats : la sélection définitive doit aussi pouvoir
+    # couvrir une portion moins peuplée de la trace.
+    for town in entries:
         key = normalize_label(town["name"])
         if key in seen:
             continue
         selected.append({**town, "role": "major"})
         seen.add(key)
-        if sum(item["role"] == "major" for item in selected) >= candidate_count:
-            break
     return sorted(selected, key=lambda item: item["km"])
 
 
@@ -175,39 +176,86 @@ def coordinates_at_km(entries, points, distances):
     return result
 
 
-def remove_nearby_towns(towns, mean_lat, major_count, proximity_ratio=.045):
-    """Ne conserve qu'un nom dans une même zone visuelle.
-
-    Le départ est prioritaire, puis l'arrivée, puis les villes par population.
-    """
+def remove_nearby_towns(towns, mean_lat, major_count, extent, pixel_size,
+                        minimum_pixels=360):
+    """Priorise la population puis comble les grands intervalles du parcours."""
     if not towns:
         return []
     factor = math.cos(math.radians(mean_lat))
     xy = np.asarray([(town["lon"] * factor, town["lat"]) for town in towns])
-    diagonal = math.hypot(np.ptp(xy[:, 0]), np.ptp(xy[:, 1])) or 1
-    minimum_distance = diagonal * proximity_ratio
-    priority = {"start": 0, "finish": 1, "major": 2}
-    ordered = sorted(
-        towns,
-        key=lambda town: (priority.get(town.get("role"), 3), -town.get("population", 0)),
-    )
+    width, height = extent[1] - extent[0], extent[3] - extent[2]
+    pixel_xy = np.column_stack((
+        (xy[:, 0] - extent[0]) / width * pixel_size[0],
+        (xy[:, 1] - extent[2]) / height * pixel_size[1],
+    ))
+    indexed = list(zip(towns, pixel_xy))
+    indexed = [
+        item for item in indexed
+        if item[0].get("role") in {"start", "finish"}
+        or item[0].get("distance_in_town", 0) >= 2.0
+    ]
     kept = []
-    major_kept = 0
-    for town in ordered:
-        if town.get("role") == "major" and major_kept >= major_count:
+
+    def add_best(candidates):
+        for town, point in sorted(candidates, key=lambda item: item[0].get("population", 0), reverse=True):
+            if all(np.linalg.norm(point - old[1]) >= minimum_pixels for old in kept):
+                kept.append((town, point))
+                return True
+        return False
+
+    for item in indexed:
+        if item[0].get("role") in {"start", "finish"}:
+            add_best([item])
+
+    # D'abord les villes réellement importantes : une petite commune ne peut
+    # plus évincer Avignon simplement parce qu'elle tombe dans un secteur.
+    for item in sorted(indexed, key=lambda item: item[0].get("population", 0), reverse=True):
+        if len(kept) >= max(4, major_count // 2 + 1):
+            break
+        add_best([item])
+
+    # Puis on coupe toujours le plus long intervalle kilométrique encore vide,
+    # en y prenant la commune la plus peuplée compatible avec l'écart en px.
+    end_km = max(town["km"] for town in towns)
+    while len(kept) < major_count + 1:
+        marks = sorted([0, end_km] + [item[0]["km"] for item in kept])
+        gaps = sorted(zip(marks, marks[1:]), key=lambda pair: pair[1] - pair[0], reverse=True)
+        added = False
+        for low, high in gaps:
+            candidates = [item for item in indexed if low < item[0]["km"] < high]
+            if add_best(candidates):
+                added = True
+                break
+        if not added:
+            break
+
+    # Dernière vérification locale : dans un même voisinage visuel, conserve
+    # la ville la plus peuplée. Cela remplace par exemple Tuchan par Leucate.
+    for index, (town, point) in enumerate(list(kept)):
+        if town.get("role") in {"start", "finish"}:
             continue
-        point = np.asarray((town["lon"] * factor, town["lat"]))
-        if any(np.linalg.norm(point - old[1]) < minimum_distance for old in kept):
-            continue
-        kept.append((town, point))
-        major_kept += town.get("role") == "major"
+        nearby = [
+            item for item in indexed
+            if np.linalg.norm(item[1] - point) < minimum_pixels
+            and item[0].get("population", 0) > town.get("population", 0)
+        ]
+        for replacement in sorted(
+            nearby, key=lambda item: item[0].get("population", 0), reverse=True
+        ):
+            if all(
+                other_index == index
+                or np.linalg.norm(replacement[1] - other[1]) >= minimum_pixels
+                for other_index, other in enumerate(kept)
+            ):
+                kept[index] = replacement
+                break
     return sorted((item[0] for item in kept), key=lambda town: town["km"])
 
 
 def water_geometries(points):
     lats = [point[0] for point in points]
     lons = [point[1] for point in points]
-    margin = 0.12
+    margin = max(0.12, max(max(lats) - min(lats), max(lons) - min(lons)) * .18)
     bbox = (min(lats) - margin, min(lons) - margin, max(lats) + margin, max(lons) + margin)
     query = f"""[out:json][timeout:600];
 (
@@ -227,8 +275,14 @@ out body geom;
     try:
         elements = osm.overpass(query)
     except (Exception, SystemExit) as error:
-        print(f"Eau OSM indisponible, carte produite sans fond hydrographique : {error}")
-        return []
+        legacy_bbox = (min(lats) - .12, min(lons) - .12, max(lats) + .12, max(lons) + .12)
+        legacy_query = query.replace(str(bbox), str(legacy_bbox))
+        try:
+            elements = osm.overpass(legacy_query)
+            print(f"Extension OSM indisponible, ancien fond en cache conservé : {error}")
+        except (Exception, SystemExit):
+            print(f"Eau OSM indisponible, carte produite sans fond hydrographique : {error}")
+            return []
 
     result = []
     for element in elements:
@@ -333,6 +387,23 @@ def project(points, mean_lat):
     return np.asarray([(lon * factor, lat) for lat, lon in points])
 
 
+def map_layout(points):
+    """Retourne la projection, l'emprise et les pixels exacts du PNG maître."""
+    mean_lat = sum(point[0] for point in points) / len(points)
+    route_xy = project(points, mean_lat)
+    span_x, span_y = np.ptp(route_xy[:, 0]), np.ptp(route_xy[:, 1])
+    padding_x, padding_y = span_x * .14, span_y * .14
+    extent = [route_xy[:, 0].min() - padding_x, route_xy[:, 0].max() + padding_x,
+              route_xy[:, 1].min() - padding_y, route_xy[:, 1].max() + padding_y]
+    width, height = extent[1] - extent[0], extent[3] - extent[2]
+    if width / height > 1.65:
+        extra = (width / 1.65 - height) / 2
+        extent[2] -= extra
+        extent[3] += extra
+    ratio = (extent[1] - extent[0]) / (extent[3] - extent[2])
+    return mean_lat, route_xy, tuple(extent), 4320, round(4320 / ratio)
+
+
 def smooth_route(route_xy):
     """Allège le GPX sans déformer ses grandes boucles."""
     tolerance = max(np.ptp(route_xy[:, 0]), np.ptp(route_xy[:, 1])) * .0018
@@ -350,11 +421,13 @@ def smooth_route(route_xy):
     return smoothed
 
 
-def terrain_grid(points, zoom=8):
+def terrain_grid(points, zoom=8, legacy_margin=False):
     """Charge un relief Terrarium précis et persistant pour l'emprise GPX."""
     lats = [point[0] for point in points]
     lons = [point[1] for point in points]
-    margin = .12
+    margin = .12 if legacy_margin else max(
+        .12, max(max(lats) - min(lats), max(lons) - min(lons)) * .18
+    )
     north, south = max(lats) + margin, min(lats) - margin
     west, east = min(lons) - margin, max(lons) + margin
     tiles = 2 ** zoom
@@ -385,6 +458,9 @@ def terrain_grid(points, zoom=8):
                 row.append(np.asarray(Image.open(tile_path).convert("RGB"), dtype=float))
             rows.append(np.concatenate(row, axis=1))
     except Exception as error:
+        if not legacy_margin and margin > .12:
+            print(f"Extension du relief indisponible, ancien cache conservé : {error}")
+            return terrain_grid(points, zoom=zoom, legacy_margin=True)
         print(f"Relief indisponible, carte produite sans zones montagneuses : {error}")
         return None
 
@@ -497,7 +573,7 @@ def draw_star(ax, x, y, radius, rng):
     ax.scatter([x], [y], s=18, color="#111", zorder=11)
 
 
-def draw_city_icon(ax, x, y, radius, icon_path):
+def draw_city_icon(ax, x, y, icon_path, size_points=36):
     """Pose une variante de point manuscrit exactement sur la trace."""
     icon_path = str(icon_path)
     icon = plt.imread(icon_path)
@@ -508,15 +584,22 @@ def draw_city_icon(ax, x, y, radius, icon_path):
     rgb = icon[..., :3]
     alpha = icon[..., 3] if icon.shape[2] == 4 else np.clip((1 - np.min(rgb, axis=2)) * 4, 0, 1)
     rgba = np.dstack((rgb, alpha))
-    height = radius * 4.8
-    width = height * rgba.shape[1] / rgba.shape[0]
-    ax.imshow(rgba, extent=(x - width / 2, x + width / 2, y - height / 2, y + height / 2),
-              interpolation="bilinear", zorder=11)
+    zoom = size_points / max(rgba.shape[:2])
+    ax.add_artist(AnnotationBbox(
+        OffsetImage(rgba, zoom=zoom, interpolation="bilinear"),
+        (x, y), frameon=False, box_alignment=(.5, .5), zorder=11,
+    ))
 
 
 def place_labels(ax, towns, mean_lat, extent, rng):
     factor = math.cos(math.radians(mean_lat))
     width, height = extent[1] - extent[0], extent[3] - extent[2]
+    figure_width, figure_height = ax.figure.get_size_inches()
+    unit_x = width / (figure_width * 72)
+    unit_y = height / (figure_height * 72)
+    renderer = ax.figure.canvas.get_renderer()
+    pixel_x = width / (figure_width * ax.figure.dpi)
+    pixel_y = height / (figure_height * ax.figure.dpi)
     display_positions = {}
     endpoint_indices = [
         index for index, town in enumerate(towns)
@@ -527,18 +610,23 @@ def place_labels(ax, towns, mean_lat, extent, rng):
         first_xy = np.asarray((towns[first]["lon"] * factor, towns[first]["lat"]))
         second_xy = np.asarray((towns[second]["lon"] * factor, towns[second]["lat"]))
         if np.linalg.norm(first_xy - second_xy) < max(width, height) * .055:
-            offset = max(width, height) * .025
-            display_positions[first] = first_xy + np.asarray((offset, offset * .55))
-            display_positions[second] = second_xy + np.asarray((-offset, -offset * .55))
+            display_positions[first] = first_xy + np.asarray((44 * unit_x, 24 * unit_y))
+            display_positions[second] = second_xy + np.asarray((-44 * unit_x, -24 * unit_y))
 
-    compass_size = min(width, height) * .25
-    compass_left = extent[1] - width * .035 - compass_size
+    compass_width = 170 * unit_x
+    compass_height = 170 * unit_y
+    compass_left = extent[1] - width * .035 - compass_width
     compass_bottom = extent[2] + height * .035
     occupied = [(
         compass_left - width * .015,
-        compass_left + compass_size + width * .015,
+        compass_left + compass_width + width * .015,
         compass_bottom - height * .012,
-        compass_bottom + compass_size + height * .012,
+        compass_bottom + compass_height + height * .012,
+    ), (
+        extent[0] + width * .018,
+        extent[0] + width * .48,
+        extent[3] - height * .31,
+        extent[3] - height * .018,
     )]
     icon_paths = sorted(Path(assets_dir).glob("handot_*.png"))
     if not icon_paths:
@@ -549,40 +637,27 @@ def place_labels(ax, towns, mean_lat, extent, rng):
         true_x, true_y = town["lon"] * factor, town["lat"]
         x, y = display_positions.get(index, (true_x, true_y))
         is_endpoint = town.get("role") in {"start", "finish"}
-        radius = max(width, height) * (0.016 if is_endpoint else 0.009)
+        # Une taille visuelle doit suivre le petit côté du canevas. Avec le
+        # grand côté, les icônes explosaient sur les parcours compacts/larges.
+        radius_x = 22 * unit_x
+        radius_y = 22 * unit_y
         if is_endpoint:
             if index in display_positions:
                 ax.plot([true_x, x], [true_y, y], color="#111", lw=1.6,
                         linestyle=(0, (2, 2)), zorder=8)
                 ax.scatter([true_x], [true_y], s=28, color="#111", zorder=9)
 
-        near = 1.8 if is_endpoint else 1.15
-        middle = 3.2 if is_endpoint else 2.25
-        far = 5.2 if is_endpoint else 3.8
-        candidates = [
-            (radius * near, radius * near, "left"),
-            (-radius * near, radius * near, "right"),
-            (radius * near, -radius * near, "left"),
-            (-radius * near, -radius * near, "right"),
-            (radius * middle, radius * middle, "left"),
-            (-radius * middle, radius * middle, "right"),
-            (radius * middle, -radius * middle, "left"),
-            (-radius * middle, -radius * middle, "right"),
-            (radius * far, radius * far * .86, "left"),
-            (-radius * far, radius * far * .86, "right"),
-            (radius * far, -radius * far * .86, "left"),
-            (-radius * far, -radius * far * .86, "right"),
-        ]
-        if town.get("role") == "start":
-            # Le départ est nommé juste à côté du symbole, vers l'intérieur.
-            side = -1 if x > (extent[0] + extent[1]) / 2 else 1
-            alignment = "right" if side < 0 else "left"
-            candidates = [
-                (side * radius * 2.65, radius * .15, alignment),
-                (side * radius * 2.65, radius * 1.0, alignment),
-                (side * radius * 2.65, -radius * 1.0, alignment),
-                *candidates,
-            ]
+        # Tourne réellement autour du point. Selon l'angle, le point touche le
+        # début, le milieu ou la fin du nom ; les autres ancrages restent des
+        # solutions de repli pour les zones cartographiques encombrées.
+        candidates = []
+        for distance in (1.15, 1.55, 2.05, 2.45):
+            for angle in np.linspace(0, 2 * math.pi, 24, endpoint=False):
+                dx = math.cos(angle) * radius_x * distance
+                dy = math.sin(angle) * radius_y * distance
+                natural = "left" if math.cos(angle) > .30 else "right" if math.cos(angle) < -.30 else "center"
+                candidates.append((dx, dy, natural))
+                candidates.extend((dx, dy, anchor) for anchor in ("left", "center", "right") if anchor != natural)
         rng.shuffle(candidates)
         midpoint = (extent[0] + extent[1]) / 2
         route_center = ROUTE_FOR_LABELS.mean(axis=0)
@@ -605,18 +680,47 @@ def place_labels(ax, towns, mean_lat, extent, rng):
         chosen = None
         is_start = town.get("role") == "start"
         font_size = 70 if is_start else (42 if is_endpoint else 42)
+        label_font = script_font(font_size) if is_endpoint else font_properties(font_size, True)
+        measured_width, measured_height, _ = renderer.get_text_width_height_descent(
+            label, label_font, ismath=False
+        )
+        text_width = (measured_width + 18) * pixel_x
+        text_height = (measured_height + 18) * pixel_y
+
+        def candidate_box(candidate):
+            tx, ty = x + candidate[0], y + candidate[1]
+            if candidate[2] == "left":
+                return (tx, tx + text_width, ty - text_height / 2, ty + text_height / 2)
+            if candidate[2] == "right":
+                return (tx - text_width, tx, ty - text_height / 2, ty + text_height / 2)
+            return (tx - text_width / 2, tx + text_width / 2,
+                    ty - text_height / 2, ty + text_height / 2)
+
+        def route_clearance(candidate):
+            box = candidate_box(candidate)
+            dx = np.maximum.reduce((
+                box[0] - ROUTE_FOR_LABELS[:, 0],
+                np.zeros(len(ROUTE_FOR_LABELS)),
+                ROUTE_FOR_LABELS[:, 0] - box[1],
+            )) / pixel_x
+            dy = np.maximum.reduce((
+                box[2] - ROUTE_FOR_LABELS[:, 1],
+                np.zeros(len(ROUTE_FOR_LABELS)),
+                ROUTE_FOR_LABELS[:, 1] - box[3],
+            )) / pixel_y
+            return float(np.min(np.hypot(dx, dy)))
+
+        # Parmi toutes les positions circulaires, essaie d'abord celle dont le
+        # rectangle de texte est le plus éloigné de l'ensemble de la trace.
+        candidates.sort(key=route_clearance, reverse=True)
         for candidate in candidates:
             tx, ty = x + candidate[0], y + candidate[1]
-            text_width = width * max(.045, len(label) * font_size * .00043)
-            if candidate[2] == "left":
-                box = (tx, tx + text_width, ty - height * .010, ty + height * .010)
-            else:
-                box = (tx - text_width, tx, ty - height * .010, ty + height * .010)
+            box = candidate_box(candidate)
             overlaps_name = any(
                 not (box[1] < old[0] or box[0] > old[1] or box[3] < old[2] or box[2] > old[3])
                 for old in occupied
             )
-            route_margin_x, route_margin_y = width * .006, height * .004
+            route_margin_x, route_margin_y = 18 * pixel_x, 18 * pixel_y
             route_inside = np.any(
                 (ROUTE_FOR_LABELS[:, 0] >= box[0] - route_margin_x)
                 & (ROUTE_FOR_LABELS[:, 0] <= box[1] + route_margin_x)
@@ -634,11 +738,12 @@ def place_labels(ax, towns, mean_lat, extent, rng):
                 break
         if chosen is None:
             continue
-        draw_city_icon(ax, x, y, radius, icon_paths[icon_cursor % len(icon_paths)])
+        icon_size = 54 if town.get("role") == "start" else 36
+        draw_city_icon(ax, x, y, icon_paths[icon_cursor % len(icon_paths)], icon_size)
         icon_cursor += 1
         dx, dy, alignment = chosen
-        if abs(dx) > radius * 2.5:
-            end_x = x + dx - math.copysign(radius * .35, dx)
+        if abs(dx) > radius_x * 2.5:
+            end_x = x + dx - math.copysign(radius_x * .35, dx)
             ax.plot([x, end_x], [y, y + dy], color="#333", linewidth=1.2,
                     linestyle=(0, (2, 3)), alpha=.65, zorder=8)
         text = ax.text(
@@ -648,7 +753,7 @@ def place_labels(ax, towns, mean_lat, extent, rng):
             ha=alignment,
             va="center",
             color="#101010",
-            fontproperties=script_font(font_size) if is_endpoint else font_properties(font_size, True),
+            fontproperties=label_font,
             zorder=9,
         )
         text.set_path_effects([path_effects.withStroke(linewidth=4, foreground="#fffdf6", alpha=.95)])
@@ -697,9 +802,23 @@ def apply_torn_alpha(path, seed):
 
 def write_webp(png_path, webp_path, maximum_bytes=400_000):
     """Produit un WebP aussi grand que possible sous la limite demandée."""
+    cwebp = shutil.which("cwebp")
+    if cwebp:
+        quality = 48
+        for _ in range(4):
+            subprocess.run(
+                [cwebp, "-quiet", "-q", str(quality), "-m", "6",
+                 str(png_path), "-o", str(webp_path)],
+                check=True,
+            )
+            size = Path(webp_path).stat().st_size
+            if size <= maximum_bytes:
+                return size, Image.open(png_path).size, quality
+            quality = max(20, min(quality - 2, int(quality * (maximum_bytes / size) ** 3)))
+
     image = Image.open(png_path).convert("RGBA")
     resampling = getattr(Image, "Resampling", Image).LANCZOS
-    quality_steps = (84, 78, 72, 66, 60, 54, 48)
+    quality_steps = (84, 72, 60, 48, 42, 38, 35)
     while True:
         for quality in quality_steps:
             buffer = io.BytesIO()
@@ -714,11 +833,21 @@ def write_webp(png_path, webp_path, maximum_bytes=400_000):
         image = image.resize(new_size, resampling)
 
 
-def draw_progress_arrow(ax, route_xy):
-    """Pose deux triangles noirs dans le sens réel du GPX."""
-    lengths = np.r_[0, np.cumsum(np.linalg.norm(np.diff(route_xy, axis=0), axis=1))]
-    route_line = LineString(route_xy)
-    size = max(np.ptp(route_xy[:, 0]), np.ptp(route_xy[:, 1])) * .021
+def draw_route_and_arrows(ax, route_xy, extent, towns, mean_lat, rng, jitter):
+    """Dessine la route déjà découpée, puis les triangles dans ses trous."""
+    width, height = extent[1] - extent[0], extent[3] - extent[2]
+    figure_width, figure_height = ax.figure.get_size_inches()
+    unit = np.asarray((width / (figure_width * 72), height / (figure_height * 72)))
+    screen_xy = route_xy / unit
+    factor = math.cos(math.radians(mean_lat))
+    town_screen = np.asarray([
+        (town["lon"] * factor / unit[0], town["lat"] / unit[1])
+        for town in towns
+    ])
+    lengths = np.r_[0, np.cumsum(np.linalg.norm(np.diff(screen_xy, axis=0), axis=1))]
+    route_line = LineString(screen_xy)
+    triangle_length = 30
+    half_base = 13
 
     def straight_center(fraction, search=0):
         target = lengths[-1] * fraction
@@ -736,39 +865,55 @@ def draw_progress_arrow(ax, route_xy):
             after = route_xy[index + 5] - route_xy[index]
             before /= np.linalg.norm(before) or 1
             after /= np.linalg.norm(after) or 1
-            scored.append((math.acos(np.clip(np.dot(before, after), -1, 1)), index))
+            bend = math.acos(np.clip(np.dot(before, after), -1, 1))
+            town_distance = (
+                np.min(np.linalg.norm(town_screen - screen_xy[index], axis=1))
+                if len(town_screen) else 9999
+            )
+            # Écarte fortement les emplacements proches d'un point ou de son
+            # nom ; parmi les autres, privilégie le tronçon le plus droit.
+            penalty = max(0, 240 - town_distance) / 20
+            scored.append((bend + penalty, index))
         return min(scored)[1] if scored else int(np.abs(lengths - target).argmin())
 
-    for center in (straight_center(.07), straight_center(.55, .08)):
+    gaps = []
+    triangles = []
+    for center in (straight_center(.07, .04), straight_center(.55, .08)):
         target = lengths[center]
-        erase_start = max(0, target - size * 2.55)
-        erase_end = min(lengths[-1], target + size * .50)
-        visible_before = np.asarray(route_line.interpolate(erase_start).coords[0])
-        visible_after = np.asarray(route_line.interpolate(erase_end).coords[0])
-        direction = visible_after - visible_before
-        visible_distance = np.linalg.norm(direction)
+        base_distance = max(0, target - triangle_length / 2)
+        tip_distance = min(lengths[-1], target + triangle_length / 2)
+        # Le trou transparent dépasse légèrement le triangle : les extrémités
+        # irrégulières des deux passes de la trace ne peuvent plus ressortir.
+        gap_start = max(0, base_distance - 5)
+        gap_end = min(lengths[-1], tip_distance + 5)
+        base = np.asarray(route_line.interpolate(base_distance).coords[0])
+        tip = np.asarray(route_line.interpolate(tip_distance).coords[0])
+        direction = tip - base
         direction /= np.linalg.norm(direction) or 1
         normal = np.asarray((-direction[1], direction[0]))
-        triangle_length = min(size * 1.90, visible_distance * .68)
-        free_space = max(0, visible_distance - triangle_length)
-        base = visible_before + direction * free_space * .50
-        tip = base + direction * triangle_length
-        triangle = np.asarray([
+        triangle_screen = np.asarray([
             tip,
-            base + normal * size * .78,
-            base - normal * size * .78,
+            base + normal * half_base,
+            base - normal * half_base,
         ])
+        gaps.append((gap_start, gap_end))
+        triangles.append(triangle_screen * unit)
 
-        erased = substring(
-            route_line,
-            erase_start,
-            erase_end,
-        )
-        erased_xy = np.asarray(erased.coords)
-        ax.plot(
-            erased_xy[:, 0], erased_xy[:, 1], color="#fffdf6", linewidth=24,
-            solid_capstyle="butt", solid_joinstyle="round", zorder=12,
-        )
+    # Aucun masque blanc : les deux morceaux sous les triangles ne sont tout
+    # simplement jamais dessinés. Le fond cartographique reste donc intact.
+    cursor = 0
+    for gap_start, gap_end in sorted(gaps):
+        segment = substring(route_line, cursor, gap_start)
+        segment_xy = np.asarray(segment.coords) * unit
+        rough_line(ax, segment_xy, rng, "#0d0d0d", 8.8, 6,
+                   jitter=jitter, passes=2, alpha=1.9)
+        cursor = gap_end
+    segment = substring(route_line, cursor, lengths[-1])
+    segment_xy = np.asarray(segment.coords) * unit
+    rough_line(ax, segment_xy, rng, "#0d0d0d", 8.8, 6,
+               jitter=jitter, passes=2, alpha=1.9)
+
+    for triangle in triangles:
         ax.fill(
             triangle[:, 0], triangle[:, 1],
             facecolor="#050505", edgecolor="none", zorder=13,
@@ -779,22 +924,18 @@ def render(title, summary, points, towns, water, output, seed):
     global ROUTE_FOR_LABELS, SEA_FOR_LABELS
     rng = np.random.default_rng(seed)
     py_rng = random.Random(seed)
-    mean_lat = sum(point[0] for point in points) / len(points)
-    route_xy = project(points, mean_lat)
+    mean_lat, route_xy, extent, _, _ = map_layout(points)
     ROUTE_FOR_LABELS = route_xy
     drawn_route_xy = smooth_route(route_xy)
     span_x, span_y = np.ptp(route_xy[:, 0]), np.ptp(route_xy[:, 1])
-    padding_x, padding_y = span_x * 0.23, span_y * 0.12
-    extent = (
-        route_xy[:, 0].min() - padding_x,
-        route_xy[:, 0].max() + padding_x,
-        route_xy[:, 1].min() - padding_y,
-        route_xy[:, 1].max() + padding_y,
-    )
-
+    width, height = extent[1] - extent[0], extent[3] - extent[2]
     ratio = (extent[1] - extent[0]) / (extent[3] - extent[2])
-    figsize = (14, 14 / ratio)
-    fig, ax = plt.subplots(figsize=figsize, dpi=180, facecolor="#fffdf6")
+    # PNG maître haute définition. Le WebP est redimensionné séparément pour
+    # respecter sa limite de poids, sans appauvrir l'original cartographique.
+    figure_dpi = 240
+    figure_width = 18
+    figsize = (figure_width, figure_width / ratio)
+    fig, ax = plt.subplots(figsize=figsize, dpi=figure_dpi, facecolor="#fffdf6")
     ax.set_facecolor("#fffdf6")
     watercolor(ax, route_xy, rng)
 
@@ -838,9 +979,10 @@ def render(title, summary, points, towns, water, output, seed):
             rough_line(ax, xy, rng, "#68bdcb", 1.35 if item["kind"] == "river" else .9, 2,
                        jitter=max(span_x, span_y) * .00016, passes=2, alpha=.42)
 
-    rough_line(ax, drawn_route_xy, rng, "#0d0d0d", 8.8, 6,
-               jitter=max(span_x, span_y) * .00007, passes=2, alpha=1.9)
-    draw_progress_arrow(ax, drawn_route_xy)
+    draw_route_and_arrows(
+        ax, drawn_route_xy, extent, towns, mean_lat, rng,
+        max(span_x, span_y) * .00007,
+    )
     place_labels(ax, towns, mean_lat, extent, py_rng)
 
     title_text = ax.text(
@@ -857,7 +999,7 @@ def render(title, summary, points, towns, water, output, seed):
     if summary:
         legend = ax.text(
             extent[0] + (extent[1] - extent[0]) * .03,
-            extent[3] - (extent[3] - extent[2]) * .078,
+        extent[3] - (extent[3] - extent[2]) * .125,
             summary,
             ha="left", va="top",
             fontproperties=font_properties(28, True),
@@ -885,18 +1027,20 @@ def render(title, summary, points, towns, water, output, seed):
         else:
             alpha = np.clip((1 - np.min(compass, axis=2)) * 3.5, 0, 1)
         rgba = np.dstack((compass, alpha))
-        compass_size = min(width := extent[1] - extent[0], height := extent[3] - extent[2]) * .25
-        left = extent[1] - width * .035 - compass_size
-        bottom = extent[2] + height * .035
-        ax.imshow(rgba, extent=(left, left + compass_size, bottom, bottom + compass_size),
-                  interpolation="bilinear", zorder=12)
+        compass_points = 170
+        zoom = compass_points / max(rgba.shape[:2])
+        ax.add_artist(AnnotationBbox(
+            OffsetImage(rgba, zoom=zoom, interpolation="bilinear"),
+            (extent[1] - width * .035, extent[2] + height * .035),
+            frameon=False, box_alignment=(1, 0), zorder=12,
+        ))
 
     ax.set_xlim(extent[0], extent[1])
     ax.set_ylim(extent[2], extent[3])
     ax.set_aspect("equal")
     ax.axis("off")
     fig.subplots_adjust(0, 0, 1, 1)
-    fig.savefig(output, dpi=180, facecolor="#fffdf6", pad_inches=.08)
+    fig.savefig(output, dpi=figure_dpi, facecolor="#fffdf6", pad_inches=.08)
     plt.close(fig)
     apply_torn_alpha(output, seed)
 
@@ -932,13 +1076,15 @@ def main():
 
     title, points = read_gpx(options.gpx)
     distances = cumulative_km(points)
-    mean_lat = sum(point[0] for point in points) / len(points)
+    mean_lat, _, extent, pixel_width, pixel_height = map_layout(points)
     towns = remove_nearby_towns(
         coordinates_at_km(
             select_towns(read_road_book(road_book), options.cities), points, distances
         ),
         mean_lat,
         options.cities,
+        extent,
+        (pixel_width, pixel_height),
     )
 
     cache.init_cache(f"map-{Path(options.gpx).name}")

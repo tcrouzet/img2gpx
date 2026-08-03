@@ -1002,8 +1002,42 @@ def update_towns_catalog(towns, path=OSM_TOWNS_CSV_PATH):
         )
 
 
-def osm_administrative_statuses(frame):
-    """Statuts des centres administratifs OSM rencontrés dans l'emprise."""
+def catalog_administrative_statuses(towns):
+    """Lit en priorité les statuts déjà connus du catalogue cumulatif."""
+    rows = load_towns_catalog()
+    statuses = defaultdict(list)
+    covered = set()
+
+    by_code = {
+        (row.get("country", "").upper(), row.get("code", "")): row
+        for row in rows
+        if row.get("code")
+    }
+    by_name = {
+        (row.get("country", "").upper(), normalize_name(row.get("name"))): row
+        for row in rows
+    }
+    for name, town in towns.towns.items():
+        country = str(town.get("country", "")).upper()
+        code = str(town.get("catalog_code") or town.get("code_ville") or "")
+        row = by_code.get((country, code)) if code else None
+        if row is None:
+            row = by_name.get((country, normalize_name(name)))
+        if row is None:
+            continue
+        covered.add(normalize_name(name))
+        values = re.split(r"\s*\|\s*|\s*;\s*", row.get("administrative_status", ""))
+        statuses[normalize_name(name)].extend(value for value in values if value)
+    return statuses, covered
+
+
+def osm_administrative_statuses(frame, towns):
+    """Statuts locaux, complétés par Overpass pour les communes nouvelles."""
+    statuses, covered = catalog_administrative_statuses(towns)
+    wanted = {normalize_name(name) for name in towns.towns}
+    if wanted <= covered:
+        return statuses
+
     bbox = (
         frame["min_lat"],
         frame["min_lon"],
@@ -1014,14 +1048,15 @@ def osm_administrative_statuses(frame):
 relation["boundary"="administrative"]["admin_level"~"^(4|6|7)$"]{bbox}->.rels;
 (.rels;node(r.rels:"admin_centre"););out body;
 """
-    elements = o.overpass(query)
+    # o.overpass consulte son cache avant le réseau. Cette requête n'est donc
+    # émise que lorsqu'au moins une commune n'est pas cataloguée. Si elle
+    # échoue, l'erreur est volontairement propagée : pas de book incomplet.
+    elements = o.overpass(query, timeout=45)
     nodes = {
         element["id"]: element.get("tags", {})
         for element in elements
         if element.get("type") == "node"
     }
-    statuses = defaultdict(list)
-
     for relation in elements:
         if relation.get("type") != "relation":
             continue
@@ -1061,7 +1096,7 @@ def generate_raw_books(directory):
     towns = o.TownManager()
     towns.cities(frame)
     towns.gpx_villes(gpx, meters)
-    administrative_statuses = osm_administrative_statuses(frame)
+    administrative_statuses = osm_administrative_statuses(frame, towns)
 
     OSM_TOWN_TAGS.clear()
     for name, town in towns.towns.items():
