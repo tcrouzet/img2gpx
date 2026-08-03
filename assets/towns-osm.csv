@@ -1,0 +1,109 @@
+name,country,code,postal_code,population,place,capital,administrative_status,designation,website,wikipedia,wikidata
+Avinyonet de Puigventós,ES,17012,17742,1669,,,,,,https://ca.wikipedia.org/wiki/Avinyonet_de_Puigvent%C3%B3s,Q11227
+Bellcaire d'Empordà,ES,17018,17141,722,,,,,,https://ca.wikipedia.org/wiki/Bellcaire_d%27Empord%C3%A0,Q13461
+Biure,ES,17234,17723,227,,,,,,https://ca.wikipedia.org/wiki/Biure,Q11236
+Borrassà,ES,17026,17770,802,,,,,,https://ca.wikipedia.org/wiki/Borrass%C3%A0,Q11242
+Cadaqués,ES,17032,17488,2906,,,,,,https://ca.wikipedia.org/wiki/Cadaqu%C3%A9s,Q11263
+Capmany,ES,17042,17750,677,,,,,,https://ca.wikipedia.org/wiki/Campmany,Q7106
+Castelló d'Empúries,ES,17047,17486,12275,municipality,,,,,https://ca.wikipedia.org/wiki/Castell%C3%B3_d%27Emp%C3%BAries,Q11286
+Celrà,ES,17049,17460,5613,,,,,,https://ca.wikipedia.org/wiki/Celr%C3%A0,Q13426
+Cervià de Ter,ES,17050,17464,1030,,,,,,https://ca.wikipedia.org/wiki/Cervi%C3%A0_de_Ter,Q13428
+el Port de la Selva,ES,17140,,1055,,,,,,https://ca.wikipedia.org/wiki/El_Port_de_la_Selva,Q11811
+Flaçà,ES,17067,,1174,,,,,,https://ca.wikipedia.org/wiki/Fla%C3%A7%C3%A0,Q13430
+Foixà,ES,17068,,298,,,,,,https://ca.wikipedia.org/wiki/Foix%C3%A0,Q13465
+Garrigàs,ES,17075,,479,,,,,,https://ca.wikipedia.org/wiki/Garrig%C3%A0s,Q11329
+Girona,ES,17079,,108352,,,Capitale provinciale,,,https://ca.wikipedia.org/wiki/Girona,Q7038
+Juià,ES,17087,,320,,,,,,https://ca.wikipedia.org/wiki/Jui%C3%A0,Q13432
+l'Escala,ES,17062,,10641,,,,,,https://ca.wikipedia.org/wiki/L%27Escala,Q11304
+la Jonquera,ES,17086,,3410,,,,,,https://ca.wikipedia.org/wiki/La_Jonquera,Q7113
+la Tallada d'Empordà,ES,17195,,485,,,,,,https://ca.wikipedia.org/wiki/La_Tallada_d%27Empord%C3%A0,Q13571
+Llançà,ES,17092,,5033,,,,,,https://ca.wikipedia.org/wiki/Llan%C3%A7%C3%A0,Q11339
+Llers,ES,17093,,1268,,,,,,https://ca.wikipedia.org/wiki/Llers,Q11342
+Pont de Molins,ES,17135,,586,,,,,,https://ca.wikipedia.org/wiki/Pont_de_Molins,Q11804
+Pontós,ES,17136,,295,,,,,,https://ca.wikipedia.org/wiki/Pont%C3%B3s,Q11807
+Rabós,ES,17143,,236,,,,,,https://ca.wikipedia.org/wiki/Rab%C3%B3s,Q7126
+Roses,ES,17152,,20175,,,,,,https://ca.wikipedia.org/wiki/Roses,Q11822
+Sant Joan de Mollet,ES,17168,,536,,,,,,https://ca.wikipedia.org/wiki/Sant_Joan_de_Mollet,Q13447
+Sant Julià de Ramis,ES,17169,,3702,,,,,,https://ca.wikipedia.org/wiki/Sant_Juli%C3%A0_de_Ramis,Q13453
+Sant Martí Vell,ES,17173,,270,,,,,,https://ca.wikipedia.org/wiki/Sant_Mart%C3%AD_Vell,Q13458
+Sant Pere Pescador,ES,17178,,2285,,,,,,https://ca.wikipedia.org/wiki/Sant_Pere_Pescador,Q11852
+Sarrià de Ter,ES,17186,17840,5404,,,,,,https://ca.wikipedia.org/wiki/Sarri%C3%A0_de_Ter,Q13456
+"Saus, Camallera i Llampaies",ES,17187,17465,908,,,,,,https://ca.wikipedia.org/wiki/Saus%2C_Camallera_i_Llampaies,Q11865
+Torroella de Montgrí,ES,17199,17130,12507,,,,,,https://ca.wikipedia.org/wiki/Torroella_de_Montgr%C3%AD,Q13573
+Ultramort,ES,17203,17133,218,,,,,,https://ca.wikipedia.org/wiki/Ultramort,Q13588
+Verges,ES,17211,17142,1160,,,,,,https://ca.wikipedia.org/wiki/Verges,Q13586
+Viladasens,ES,17216,17464,205,,,,,,https://ca.wikipedia.org/wiki/Viladasens,Q13455
+Vilamaniscle,ES,17227,17781,185,,,,,,https://ca.wikipedia.org/wiki/Vilamaniscle,Q12165
+Vilaür,ES,17222,17483,163,,,,,,https://ca.wikipedia.org/wiki/Vila%C3%BCr,Q12177
+Vilopriu,ES,17232,17144,220,,,,,,https://ca.wikipedia.org/wiki/Vilopriu,Q13585
+Agde,FR,34003,34300,29103,,,,,https://www.ville-agde.fr/,https://fr.wikipedia.org/wiki/Agde,Q191396
+Alénya,FR,66002,66200,3619,,,,,http://www.alenya.fr,https://fr.wikipedia.org/wiki/Al%C3%A9nya,Q450961
+Argelès-sur-Mer,FR,66008,66700,10792,,,,,https://www.ville-argelessurmer.fr,https://fr.wikipedia.org/wiki/Argel%C3%A8s-sur-Mer,Q644728
+Aumes,FR,34017,34530,501,,,,,https://aumes.webnode.fr/,https://fr.wikipedia.org/wiki/Aumes,Q1148810
+Bages,FR,11024,11100,779,,,,,https://www.bages.fr/fr/accueil,https://fr.wikipedia.org/wiki/Bages_%28Aude%29,Q201170
+Baixas,FR,66014,66390,2727,,,,,http://www.baixas.fr,https://fr.wikipedia.org/wiki/Baixas,Q1093092
+Balaruc-le-Vieux,FR,34024,34540,2719,,,,,https://www.ville-balaruclevieux.fr,https://fr.wikipedia.org/wiki/Balaruc-le-Vieux,Q652886
+Banyuls-sur-Mer,FR,66016,66650,4671,,,,,https://www.banyuls-sur-mer.com/,https://fr.wikipedia.org/wiki/Banyuls-sur-Mer,Q6753
+Bessan,FR,34031,34550,5572,,,,,https://www.bessan.fr/,https://fr.wikipedia.org/wiki/Bessan,Q270170
+Béziers,FR,34032,34500,80341,,7,Sous-préfecture,,https://www.ville-beziers.fr/,https://fr.wikipedia.org/wiki/B%C3%A9ziers,Q174019
+Bouzigues,FR,34039,34140,1626,,,,,https://www.bouzigues.fr/,https://fr.wikipedia.org/wiki/Bouzigues,Q769568
+Calce,FR,66030,66600,220,,,,,http://www.calce.fr,https://fr.wikipedia.org/wiki/Calce,Q530366
+Canet-en-Roussillon,FR,66037,66140,12598,,,,,http://www.mairie-canet-en-roussillon.fr,https://fr.wikipedia.org/wiki/Canet-en-Roussillon,Q380514
+Cers,FR,34073,34420,2535,,,,,https://www.villedecers.fr/,https://fr.wikipedia.org/wiki/Cers,Q963252
+Claira,FR,66050,66530,4681,,,,,https://claira.fr/,https://fr.wikipedia.org/wiki/Claira,Q199773
+Collioure,FR,66053,66190,2517,,,,,http://collioure.fr/fr,https://fr.wikipedia.org/wiki/Collioure,Q254829
+Colombiers,FR,34081,34440,2668,,,,,https://www.ville-colombiers.fr/,https://fr.wikipedia.org/wiki/Colombiers_%28H%C3%A9rault%29,Q1072641
+Coursan,FR,11106,11110,5751,,,,,http://www.coursan.fr,https://fr.wikipedia.org/wiki/Coursan,Q379490
+Elne,FR,66065,66200,9428,,,,,https://ville-elne.fr/fr/,https://fr.wikipedia.org/wiki/Elne,Q23073
+Espira-de-l'Agly,FR,66069,66600,3532,,,,,https://www.espira.com/fr,https://fr.wikipedia.org/wiki/Espira-de-l%27Agly,Q1110218
+Fitou,FR,11144,11510,1122,,,,,http://www.fitou.fr,https://fr.wikipedia.org/wiki/Fitou,Q114452
+Fleury,FR,11145,11560,3896,,,,,http://www.communefleury.fr,https://fr.wikipedia.org/wiki/Fleury_%28Aude%29,Q626793
+Gruissan,FR,11170,11430,5096,,,,,http://www.ville-gruissan.fr,https://fr.wikipedia.org/wiki/Gruissan,Q815593
+La Palme,FR,11188,11480,1784,,,,,http://la-palme.fr,https://fr.wikipedia.org/wiki/La_Palme,Q427976
+Le Barcarès,FR,66017,66420,6049,,,,,http://www.portbarcares.com/,https://fr.wikipedia.org/wiki/Le_Barcar%C3%A8s,Q689457
+Le Boulou,FR,66024,66160,5321,,,,,http://www.mairie-leboulou.fr,https://fr.wikipedia.org/wiki/Le_Boulou,Q8672
+Le Perthus,FR,66137,66480,560,,,,,http://www.le-perthus.com/,https://fr.wikipedia.org/wiki/Le_Perthus,Q6684
+Lespignan,FR,34135,34710,3325,,,,,https://www.lespignan.fr/,https://fr.wikipedia.org/wiki/Lespignan,Q1148118
+Leucate,FR,11202,11370,4550,,,,,https://www.tourisme-leucate.fr/,https://fr.wikipedia.org/wiki/Leucate,Q459673
+Llupia,FR,66101,66300,2140,,,,,http://www.mairie-llupia.fr,https://fr.wikipedia.org/wiki/Llupia,Q189983
+Loupian,FR,34143,34140,2195,,,,,https://www.loupian.fr/,https://fr.wikipedia.org/wiki/Loupian,Q202620
+Marseillan,FR,34150,34340,7643,,,,,https://www.ville-marseillan.fr/,https://fr.wikipedia.org/wiki/Marseillan_%28H%C3%A9rault%29,Q694955
+Maureillas-las-Illas,FR,66106,66480,2762,,,,,http://www.maureillas.fr,https://fr.wikipedia.org/wiki/Maureillas-las-Illas,Q7972
+Mèze,FR,34157,34140,12664,,,,,https://www.ville-meze.fr/,https://fr.wikipedia.org/wiki/M%C3%A8ze,Q385616
+Montagnac,FR,34162,34530,4436,,,,,https://www.ville-montagnac.fr/,https://fr.wikipedia.org/wiki/Montagnac_%28H%C3%A9rault%29,Q1072128
+Montblanc,FR,34166,34290,2854,,,,,https://www.mairie-montblanc.fr/,https://fr.wikipedia.org/wiki/Montblanc_%28H%C3%A9rault%29,Q639920
+Narbonne,FR,11262,11100,56395,,,Sous-préfecture,,http://www.narbonne.fr,https://fr.wikipedia.org/wiki/Narbonne,Q6555
+Nissan-lez-Enserune,FR,34183,34440,4049,,,,,http://www.nissan-lez-enserune.net,https://fr.wikipedia.org/wiki/Nissan-lez-Enserune,Q270195
+Passa,FR,66134,66300,1039,,,,,,https://fr.wikipedia.org/wiki/Passa,Q1369424
+Peyriac-de-Mer,FR,11285,11440,1167,,,,,http://www.peyriacdemer.org,https://fr.wikipedia.org/wiki/Peyriac-de-Mer,Q516353
+Pézenas,FR,34199,34120,7788,,,,,https://www.ville-pezenas.fr/,https://fr.wikipedia.org/wiki/P%C3%A9zenas,Q633811
+Pézilla-la-Rivière,FR,66140,66370,3942,,,,,http://www.mairie-pezilla-riviere.fr/index.htm,https://fr.wikipedia.org/wiki/P%C3%A9zilla-la-Rivi%C3%A8re,Q1369142
+Ponteilla,FR,66145,66300,2922,,,,,http://www.mairie-ponteilla-nyls.fr,https://fr.wikipedia.org/wiki/Ponteilla,Q1369411
+Port-la-Nouvelle,FR,11266,11210,5905,,,,,http://www.portlanouvelle.fr,https://fr.wikipedia.org/wiki/Port-la-Nouvelle,Q626282
+Port-Vendres,FR,66148,66660,3969,,,,,http://www.port-vendres.com/,https://fr.wikipedia.org/wiki/Port-Vendres,Q204648
+Portiragnes,FR,34209,34420,3247,,,,,https://www.ville-portiragnes.fr/,https://fr.wikipedia.org/wiki/Portiragnes,Q815483
+Poussan,FR,34213,34560,6283,,,,,http://www.ville-poussan.fr/,https://fr.wikipedia.org/wiki/Poussan,Q1149337
+Rivesaltes,FR,66164,66600,9099,,,,,http://www.rivesaltes.fr/,https://fr.wikipedia.org/wiki/Rivesaltes,Q689466
+Roquefort-des-Corbières,FR,11322,11540,1021,,,,,http://www.roquefort-des-corbieres.fr,https://fr.wikipedia.org/wiki/Roquefort-des-Corbi%C3%A8res,Q846475
+Saint-Cyprien,FR,66171,66750,11398,,,,,http://www.saint-cyprien.com,https://fr.wikipedia.org/wiki/Saint-Cyprien_%28Pyr%C3%A9n%C3%A9es-Orientales%29,Q752547
+Saint-Féliu-d'Avall,FR,66174,66170,2918,,,,,http://www.saintfeliu-avall.com,https://fr.wikipedia.org/wiki/Saint-F%C3%A9liu-d%27Avall,Q191008
+Saint-Jean-Pla-de-Corts,FR,66178,66490,2258,,,,,http://www.stjeanpladecorts.fr,https://fr.wikipedia.org/wiki/Saint-Jean-Pla-de-Corts,Q8657
+Saint-Laurent-de-la-Salanque,FR,66180,66250,10010,,,,,http://www.saintlaurentdelasalanque.fr,https://fr.wikipedia.org/wiki/Saint-Laurent-de-la-Salanque,Q199847
+Saint-Nazaire,FR,66186,66570,2785,,,,,http://www.saint-nazaire-en-roussillon.fr/,https://fr.wikipedia.org/wiki/Saint-Nazaire_%28Pyr%C3%A9n%C3%A9es-Orientales%29,Q1369456
+Saint-Thibéry,FR,34289,34630,2963,,,,,http://ville-saint-thibery.fr,https://fr.wikipedia.org/wiki/Saint-Thib%C3%A9ry,Q733258
+Salles-d'Aude,FR,11370,11110,3250,,,,,http://www.mairie-salles-d-aude.fr,https://fr.wikipedia.org/wiki/Salles-d%27Aude,Q204082
+Salses-le-Château,FR,66190,66600,3752,,,,,http://www.salses-le-chateau.fr/,https://fr.wikipedia.org/wiki/Salses-le-Ch%C3%A2teau,Q821246
+Sauvian,FR,34298,34410,5459,,,,,http://www.ville-sauvian.com,https://fr.wikipedia.org/wiki/Sauvian,Q1333777
+Sérignan,FR,34299,34410,8123,,,,,https://www.ville-serignan.fr/,https://fr.wikipedia.org/wiki/S%C3%A9rignan,Q751619
+Sigean,FR,11379,11130,5583,,,,,http://www.sigean.fr,https://fr.wikipedia.org/wiki/Sigean,Q380977
+Thuir,FR,66210,66300,8173,,,,,http://www.thuir.fr/,https://fr.wikipedia.org/wiki/Thuir,Q199697
+Torreilles,FR,66212,66440,3821,,,,,http://www.torreilles.fr,https://fr.wikipedia.org/wiki/Torreilles,Q752160
+Tourbes,FR,34311,34120,1829,,,,,http://www.tourbes.fr/,https://fr.wikipedia.org/wiki/Tourbes,Q270361
+Trouillas,FR,66217,66300,2257,,,,,,https://fr.wikipedia.org/wiki/Trouillas,Q199789
+Valros,FR,34325,34290,1645,,,,,https://valros.fr/,https://fr.wikipedia.org/wiki/Valros,Q198629
+Vendres,FR,34329,34350,2736,,,,,https://www.vendres.com/,https://fr.wikipedia.org/wiki/Vendres,Q262131
+Vias,FR,34332,34450,5882,,,,,https://ville-vias.fr/,https://fr.wikipedia.org/wiki/Vias,Q815683
+Villelongue-de-la-Salanque,FR,66224,66410,3301,,,,,http://www.villelongue-de-la-salanque.fr,https://fr.wikipedia.org/wiki/Villelongue-de-la-Salanque,Q1369473
+Villeneuve-lès-Béziers,FR,34336,34420,4098,,,,,https://www.villeneuve-les-beziers.fr/,https://fr.wikipedia.org/wiki/Villeneuve-l%C3%A8s-B%C3%A9ziers,Q1322772
+Villeveyrac,FR,34341,34560,3934,,,,,http://villeveyrac.fr,https://fr.wikipedia.org/wiki/Villeveyrac,Q1148000
+Vivès,FR,66233,66490,173,,,,,,https://fr.wikipedia.org/wiki/Viv%C3%A8s,Q1153177

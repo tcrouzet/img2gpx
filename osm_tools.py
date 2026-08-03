@@ -154,6 +154,7 @@ class TownManager:
                     'distance': distance,
                     'code_postal': data['postal_code'],
                     'code_ville': data['town_code'],
+                    'catalog_code': data.get('catalog_code', data['town_code']),
                     'population': data['population'],
                     'web': data['web'],
                     'place': data.get('place', ''),
@@ -161,6 +162,7 @@ class TownManager:
                     'designation': data.get('designation', ''),
                     'wikipedia': data.get('wikipedia', ''),
                     'wikidata': data.get('wikidata', ''),
+                    'country': data.get('country', ''),
                     }
         else:
             print("Problem update town", data['name'], distance_enter, distance)
@@ -280,12 +282,31 @@ class TownManager:
                     # INSEE : les deux peuvent avoir cinq chiffres.
                     town_code = ""
 
+                if town_code:
+                    country = "FR"
+                    catalog_code = town_code
+                elif 'ine:municipio' in row and not isinstance(row['ine:municipio'], float):
+                    country = "ES"
+                    catalog_code = str(row['ine:municipio']).strip()
+                else:
+                    iso_country = row.get('ISO3166-1', '')
+                    address_country = row.get('addr:country', '')
+                    country = (
+                        iso_country.strip().upper()
+                        if isinstance(iso_country, str)
+                        else address_country.strip().upper()
+                        if isinstance(address_country, str)
+                        else ''
+                    )
+                    catalog_code = ""
+
                 web = row['website'].strip() if 'website' in row and isinstance(row['website'], str) and row['website'].lower() != 'nan' else ""
                 
                 response = {
                     'name': row['name'].strip(),
                     'postal_code': postal_code,
                     'town_code': town_code,
+                    'catalog_code': catalog_code,
                     'population': row['population'],
                     'web': web,
                     'place': row.get('place', '') if isinstance(row.get('place', ''), str) else '',
@@ -293,6 +314,7 @@ class TownManager:
                     'designation': row.get('designation', '') if isinstance(row.get('designation', ''), str) else '',
                     'wikipedia': row.get('wikipedia', '') if isinstance(row.get('wikipedia', ''), str) else '',
                     'wikidata': row.get('wikidata', '') if isinstance(row.get('wikidata', ''), str) else '',
+                    'country': country,
                     }
 
                 cache.into_cache(hash, response)

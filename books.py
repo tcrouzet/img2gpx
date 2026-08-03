@@ -651,6 +651,9 @@ def resolve_town_links(candidate):
     if candidate.get("source") == "osm":
         return candidate.get("website") or None, candidate.get("wiki_url")
 
+    if candidate.get("source") == "catalog" and candidate.get("website"):
+        return candidate.get("website"), candidate.get("wiki_url")
+
     wiki_url = candidate.get("wiki_url")
     title = candidate.get("wiki_title")
     entity = candidate.get("entity")
@@ -858,10 +861,93 @@ def format_plus(ways_info):
     return "".join(lines)
 
 
-def export_route_towns(towns, path):
-    """Sauvegarde une source locale et internationale des communes du parcours."""
+OSM_TOWNS_CSV_PATH = os.path.join(assets_dir, "towns-osm.csv")
+
+
+def town_catalog_key(row):
+    wikidata = (row.get("wikidata") or "").strip()
+    if wikidata:
+        return "wikidata", wikidata
+    country = (row.get("country") or "").strip().upper()
+    code = (row.get("code") or "").strip()
+    if code:
+        return "code", country, code
+    return "name", country, normalize_name(row.get("name"))
+
+
+def load_towns_catalog(path=OSM_TOWNS_CSV_PATH):
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8", newline="") as source:
+        return list(csv.DictReader(source))
+
+
+def catalog_candidate(name, insee=None):
+    """Cherche d'abord une commune dans le catalogue local cumulatif."""
+    normalized = normalize_name(name)
+    for row in load_towns_catalog():
+        if insee and row.get("code") == insee:
+            match = True
+        else:
+            match = normalize_name(row.get("name")) == normalized
+        if not match:
+            continue
+
+        wikipedia = row.get("wikipedia") or ""
+        wiki_url = wikipedia if wikipedia.startswith("http") else parse_osm_wikipedia(wikipedia)
+        wiki_title = None
+        if wiki_url and "/wiki/" in wiki_url:
+            wiki_title = urllib.parse.unquote(wiki_url.split("/wiki/", 1)[1]).replace("_", " ")
+        return {
+            "source": "catalog",
+            "coords": None,
+            "wiki_url": wiki_url,
+            "wiki_title": wiki_title,
+            "entity": None,
+            "insee": row.get("code") or insee,
+            "label": row.get("name") or name,
+            "population": row.get("population"),
+            "website": row.get("website"),
+            "wikidata": row.get("wikidata"),
+        }
+    return None
+
+
+def enrich_towns_catalog(updates, path=OSM_TOWNS_CSV_PATH):
+    """Reporte dans le catalogue les liens résolus pendant la génération."""
+    rows = load_towns_catalog(path)
+    for update in updates:
+        normalized = normalize_name(update["name"])
+        for row in rows:
+            same_code = update.get("insee") and row.get("code") == update["insee"]
+            same_name = normalize_name(row.get("name")) == normalized
+            if not (same_code or same_name):
+                continue
+            if update.get("website"):
+                row["website"] = update["website"]
+            if update.get("wikipedia"):
+                row["wikipedia"] = update["wikipedia"]
+            break
+
+    if not rows:
+        return
+    fields = list(rows[0].keys())
+    with open(path, "w", encoding="utf-8", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(
+            sorted(
+                rows,
+                key=lambda row: (row.get("country", ""), normalize_name(row.get("name"))),
+            )
+        )
+
+
+def update_towns_catalog(towns, path=OSM_TOWNS_CSV_PATH):
+    """Fusionne les communes du parcours dans le catalogue OSM permanent."""
     fields = (
         "name",
+        "country",
         "code",
         "postal_code",
         "population",
@@ -873,27 +959,47 @@ def export_route_towns(towns, path):
         "wikipedia",
         "wikidata",
     )
+
+    catalog = {}
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8", newline="") as source:
+            for row in csv.DictReader(source):
+                catalog[town_catalog_key(row)] = {field: row.get(field, "") for field in fields}
+
+    for name, town in towns.towns.items():
+        row = {
+            "name": name,
+            "country": town.get("country", ""),
+            "code": town.get("catalog_code", town.get("code_ville", "")),
+            "postal_code": town.get("code_postal", ""),
+            "population": town.get("population", ""),
+            "place": town.get("place", ""),
+            "capital": town.get("capital", ""),
+            "administrative_status": " | ".join(town.get("administrative_status", [])),
+            "designation": town.get("designation", ""),
+            "website": town.get("web", ""),
+            "wikipedia": (
+                parse_osm_wikipedia(town.get("wikipedia", ""))
+                or town.get("wikipedia", "")
+            ),
+            "wikidata": town.get("wikidata", ""),
+        }
+        key = town_catalog_key(row)
+        previous = catalog.get(key, {})
+        catalog[key] = {
+            field: row.get(field, "") or previous.get(field, "")
+            for field in fields
+        }
+
     with open(path, "w", encoding="utf-8", newline="") as output:
         writer = csv.DictWriter(output, fieldnames=fields)
         writer.writeheader()
-        for name, town in towns.towns.items():
-            writer.writerow(
-                {
-                    "name": name,
-                    "code": town.get("code_ville", ""),
-                    "postal_code": town.get("code_postal", ""),
-                    "population": town.get("population", ""),
-                    "place": town.get("place", ""),
-                    "capital": town.get("capital", ""),
-                    "administrative_status": " | ".join(
-                        town.get("administrative_status", [])
-                    ),
-                    "designation": town.get("designation", ""),
-                    "website": town.get("web", ""),
-                    "wikipedia": town.get("wikipedia", ""),
-                    "wikidata": town.get("wikidata", ""),
-                }
+        writer.writerows(
+            sorted(
+                catalog.values(),
+                key=lambda row: (row.get("country", ""), normalize_name(row.get("name"))),
             )
+        )
 
 
 def osm_administrative_statuses(frame):
@@ -943,7 +1049,7 @@ relation["boundary"="administrative"]["admin_level"~"^(4|6|7)$"]{bbox}->.rels;
     return statuses
 
 
-def generate_raw_books(directory, towns_csv_path):
+def generate_raw_books(directory):
     """Calcule les communes et voies puis écrit les deux Markdown techniques."""
     cache.init_cache(gpx_file)
 
@@ -977,13 +1083,14 @@ def generate_raw_books(directory, towns_csv_path):
             "website": town.get("web", ""),
             "wikipedia": town.get("wikipedia", ""),
             "wikidata": town.get("wikidata", ""),
+            "country": town.get("country", ""),
         }
         if insee:
             OSM_TOWN_TAGS[str(insee)] = tags
         OSM_TOWN_TAGS[normalize_name(name)] = tags
         town["administrative_status"] = tags["administrative_status"]
 
-    export_route_towns(towns, towns_csv_path)
+    update_towns_catalog(towns)
 
     road_book = os.path.join(directory, "road_book.md")
     with open(road_book, "w", encoding="utf-8") as output:
@@ -1034,7 +1141,6 @@ def output_paths():
     return {
         "road_book": os.path.join(output_folder, f"{stem}_road_book.md"),
         "road_book_plus": os.path.join(output_folder, f"{stem}_road_book_plus.md"),
-        "towns_csv": os.path.join(output_folder, f"{stem}_towns.csv"),
     }
 
 
@@ -1045,6 +1151,9 @@ def output_paths():
 def resolve_group(name, insee, pool_cache, ambiguous_positions, anchors, gpos):
     """Détermine le pool de candidats pour une visite : direct via INSEE
     (zéro ambiguïté) si possible, sinon repli par nom (avec ancrage)."""
+    candidate = catalog_candidate(name, insee)
+    if candidate:
+        return [candidate], True
     if insee and insee in INSEE_INDEX:
         candidate = csv_row_to_candidate(INSEE_INDEX[insee])
         return [candidate], True  # (pool, résolu_directement)
@@ -1079,6 +1188,12 @@ def process_road_book_generic(input_path, output_path, cache_namespace):
 
     for gpos, group in enumerate(groups):
         name, insee = group["name"], group["insee"]
+
+        local_candidate = catalog_candidate(name, insee)
+        if local_candidate:
+            pools[gpos] = [local_candidate]
+            direct_hits += 1
+            continue
 
         if insee and insee in INSEE_INDEX:
             pools[gpos] = [csv_row_to_candidate(INSEE_INDEX[insee])]
@@ -1173,6 +1288,7 @@ def process_road_book_generic(input_path, output_path, cache_namespace):
     # ------------------------------------------------------------------
     new_lines = list(lines)
     stats = {"official": 0, "wikipedia": 0, "missing": [], "direct_insee": direct_hits}
+    catalog_updates = []
 
     for gpos, group in enumerate(groups):
         name = group["name"]
@@ -1187,6 +1303,14 @@ def process_road_book_generic(input_path, output_path, cache_namespace):
             cache.into_cache(hash_key, (official_url, wiki_url))
 
         metadata = town_metadata(candidate)
+        catalog_updates.append(
+            {
+                "name": name,
+                "insee": group.get("insee"),
+                "website": official_url,
+                "wikipedia": wiki_url,
+            }
+        )
 
         if official_url:
             stats["official"] += 1
@@ -1203,6 +1327,8 @@ def process_road_book_generic(input_path, output_path, cache_namespace):
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+
+    enrich_towns_catalog(catalog_updates)
 
     print(f"\n---- Résumé ({os.path.basename(input_path)}) ----")
     print(f"Résolues directement par code INSEE : {stats['direct_insee']}/{len(groups)}")
@@ -1225,7 +1351,7 @@ def process_road_book_generic(input_path, output_path, cache_namespace):
 if __name__ == "__main__":
     paths = output_paths()
     with tempfile.TemporaryDirectory(prefix="img2gpx-books-") as temporary_directory:
-        raw_book, raw_book_plus = generate_raw_books(temporary_directory, paths["towns_csv"])
+        raw_book, raw_book_plus = generate_raw_books(temporary_directory)
         cache.init_cache("villes_links")
         process_road_book_generic(
             raw_book,

@@ -122,7 +122,11 @@ son type, son statut ou ses labels (`place`, `capital`, `designation`) :
 
 - <nom_du_gpx>_road_book.md
 - <nom_du_gpx>_road_book_plus.md
-- <nom_du_gpx>_towns.csv (communes traversées, construit depuis OSM et utilisable hors de France)
+
+Les communes rencontrées enrichissent progressivement le catalogue permanent
+`assets/towns-osm.csv`, commun à toutes les traces et à tous les pays. Ce
+catalogue est consulté en premier, puis complété avec les informations et liens
+nouvellement trouvés pendant la génération.
 
 ### 4. Générer les versions HTML
 
@@ -142,6 +146,16 @@ Ce script produit :
 
 - <nom_du_gpx>_road_book.html
 - <nom_du_gpx>_road_book_plus.html
+
+### 5. Générer la carte illustrée
+
+```bash
+python map.py
+```
+
+Le script utilise le GPX, les villes sélectionnées dans le road book et
+l'hydrographie OSM mise en cache. Il produit une carte PNG au style dessiné à
+la main ainsi qu'un prompt JSON optionnel pour une passe artistique par IA.
 
 ## Conseils d’utilisation
 
